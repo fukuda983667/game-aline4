@@ -1,5 +1,6 @@
 import { createSlice, configureStore } from '@reduxjs/toolkit';
 
+export type GameMode = 'pvp' | 'cpu';
 type Player = 'red' | 'yellow';
 type Cell = Player | null;
 type GameStatus = 'playing' | 'won' | 'draw';
@@ -8,18 +9,23 @@ interface GameState {
     board: Cell[][];
     currentPlayer: Player;
     gameStatus: GameStatus;
+    gameMode: GameMode;
 }
 
 const initialState: GameState = {
     board: Array(7).fill(null).map(() => Array(7).fill(null)),
     currentPlayer: 'red',
-    gameStatus: 'playing'
+    gameStatus: 'playing',
+    gameMode: 'pvp'
 };
 
 const gameSlice = createSlice({
     name: 'game',
     initialState,
     reducers: {
+        setGameMode: (state, action: { payload: GameMode }) => {
+            state.gameMode = action.payload;
+        },
         setBoard: (state, action) => {
             state.board = action.payload;
         },
@@ -37,7 +43,7 @@ const gameSlice = createSlice({
     }
 });
 
-export const { setBoard, setCurrentPlayer, setGameStatus, resetGame } = gameSlice.actions;
+export const { setGameMode, setBoard, setCurrentPlayer, setGameStatus, resetGame } = gameSlice.actions;
 
 export const store = configureStore({
     reducer: {
