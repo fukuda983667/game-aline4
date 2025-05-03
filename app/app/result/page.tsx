@@ -11,6 +11,7 @@ export default function Result() {
     const dispatch = useDispatch();
     const gameStatus = useSelector((state: RootState) => state.game.gameStatus);
     const currentPlayer = useSelector((state: RootState) => state.game.currentPlayer);
+    const gameMode = useSelector((state: RootState) => state.game.gameMode);
 
     const handleRestart = () => {
         dispatch(resetGame());
@@ -24,6 +25,9 @@ export default function Result() {
 
     const getWinnerText = () => {
         if (gameStatus === 'won') {
+            if (gameMode === 'cpu') {
+                return currentPlayer === 'red' ? 'あなたの勝利！' : 'CPUの勝利！';
+            }
             return currentPlayer === 'red' ? 'プレイヤー1の勝利！' : 'プレイヤー2の勝利！';
         }
         return '引き分け！';
@@ -38,7 +42,7 @@ export default function Result() {
                     onClick={handleRestart}
                     className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-lg text-xl transition-colors duration-200"
                 >
-                    リスタート
+                    再戦する
                 </button>
                 <button
                     onClick={handleHome}
