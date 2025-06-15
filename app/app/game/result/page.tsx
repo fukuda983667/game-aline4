@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../store/gameStore';
-import { resetGame } from '../store/gameStore';
+import { RootState } from '@/app/store/gameStore';
+import { resetGame } from '@/app/store/gameStore';
 import { useRouter } from 'next/navigation';
 
 export default function Result() {

@@ -22,7 +22,7 @@ export default function GamePage() {
 
     useEffect(() => {
         if (gameStatus === 'won' || gameStatus === 'draw') {
-            router.push('/result');
+            router.push('/game/result');
         }
     }, [gameStatus, router]);
 
