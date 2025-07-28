@@ -6,6 +6,7 @@ import { RootState } from '../store/gameStore';
 import { useGameLogic } from '../hooks/useGameLogic';
 import { useGameActions } from '../hooks/useGameActions';
 import { useCpuLogic } from '../hooks/useCpuLogic';
+import { useBoardRotation } from '../hooks/useBoardRotation';
 import { useRouter } from 'next/navigation';
 
 export default function GamePage() {
@@ -18,6 +19,7 @@ export default function GamePage() {
     const { checkWin, checkDraw } = useGameLogic();
     const { handleColumnClick } = useGameActions();
     const { makeCpuMove } = useCpuLogic();
+    const { rotateBoardLeft, rotateBoardRight } = useBoardRotation();
     const [hoveredColumn, setHoveredColumn] = React.useState<number | null>(null);
 
     useEffect(() => {
@@ -47,6 +49,22 @@ export default function GamePage() {
     return (
         <div className="container mx-auto py-8">
             <div className="flex flex-col items-center justify-center p-8">
+                <div className="flex items-center gap-24 mb-4">
+                    <button
+                        onClick={rotateBoardLeft}
+                        className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="ボードを90度左回転"
+                    >
+                        <img src="/assets/images/game/icons/left-rotation.png" alt="左回転" className="w-8 h-8" />
+                    </button>
+                    <button
+                        onClick={rotateBoardRight}
+                        className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="ボードを90度右回転"
+                    >
+                        <img src="/assets/images/game/icons/right-rotation.png" alt="右回転" className="w-8 h-8" />
+                    </button>
+                </div>
                 <div className="grid grid-cols-7 gap-2 bg-blue-500 p-4 rounded-lg">
                     {board.map((row, rowIndex) => (
                         row.map((cell, colIndex) => (
