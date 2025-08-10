@@ -3,53 +3,57 @@ import { RootState } from '../store/gameStore';
 import { useSelector } from 'react-redux';
 import { setBoard, setCurrentPlayer, setGameStatus } from '../store/gameStore';
 import { useGameLogic } from './useGameLogic';
+import { useStoneDropAnimation } from './useStoneDropAnimation';
 
 export const useBoardRotation = () => {
     const dispatch = useDispatch();
     const board = useSelector((state: RootState) => state.game.board);
     const currentPlayer = useSelector((state: RootState) => state.game.currentPlayer);
     const { checkWin, checkDraw } = useGameLogic();
+    const { animateStoneDrop } = useStoneDropAnimation();
 
     const rotateBoardLeft = () => {
         // 現在のボードを90度左回転
         const rotatedBoard = rotateMatrix90DegreesLeft(board);
 
-        // 浮いている石を落下させる
+        // 浮いている石を落下させる（アニメーション付き）
         const settledBoard = settleStones(rotatedBoard);
 
-        // Reduxストアを更新
-        dispatch(setBoard(settledBoard));
-
-        // 勝利判定
-        if (checkWin(settledBoard, currentPlayer)) {
-            dispatch(setGameStatus('won'));
-        } else if (checkDraw(settledBoard)) {
-            dispatch(setGameStatus('draw'));
-        } else {
-            // プレイヤーの一手として扱い、相手の手番に変更
-            dispatch(setCurrentPlayer(currentPlayer === 'red' ? 'yellow' : 'red'));
-        }
+        // 落下アニメーションを実行
+        animateStoneDrop(rotatedBoard, settledBoard, () => {
+            // アニメーション完了後の処理
+            // 勝利判定
+            if (checkWin(settledBoard, currentPlayer)) {
+                dispatch(setGameStatus('won'));
+            } else if (checkDraw(settledBoard)) {
+                dispatch(setGameStatus('draw'));
+            } else {
+                // プレイヤーの一手として扱い、相手の手番に変更
+                dispatch(setCurrentPlayer(currentPlayer === 'red' ? 'yellow' : 'red'));
+            }
+        });
     };
 
     const rotateBoardRight = () => {
         // 現在のボードを90度右回転
         const rotatedBoard = rotateMatrix90DegreesRight(board);
 
-        // 浮いている石を落下させる
+        // 浮いている石を落下させる（アニメーション付き）
         const settledBoard = settleStones(rotatedBoard);
 
-        // Reduxストアを更新
-        dispatch(setBoard(settledBoard));
-
-        // 勝利判定
-        if (checkWin(settledBoard, currentPlayer)) {
-            dispatch(setGameStatus('won'));
-        } else if (checkDraw(settledBoard)) {
-            dispatch(setGameStatus('draw'));
-        } else {
-            // プレイヤーの一手として扱い、相手の手番に変更
-            dispatch(setCurrentPlayer(currentPlayer === 'red' ? 'yellow' : 'red'));
-        }
+        // 落下アニメーションを実行
+        animateStoneDrop(rotatedBoard, settledBoard, () => {
+            // アニメーション完了後の処理
+            // 勝利判定
+            if (checkWin(settledBoard, currentPlayer)) {
+                dispatch(setGameStatus('won'));
+            } else if (checkDraw(settledBoard)) {
+                dispatch(setGameStatus('draw'));
+            } else {
+                // プレイヤーの一手として扱い、相手の手番に変更
+                dispatch(setCurrentPlayer(currentPlayer === 'red' ? 'yellow' : 'red'));
+            }
+        });
     };
 
     const rotateMatrix90DegreesRight = (matrix: (string | null)[][]) => {
