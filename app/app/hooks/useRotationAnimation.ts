@@ -4,6 +4,7 @@ import { startRotationAnimation, endRotationAnimation, setBoard, setCurrentPlaye
 import { useCallback, useRef } from 'react';
 import { useGameLogic } from './useGameLogic';
 import { useStoneDropAnimation } from './useStoneDropAnimation';
+import { useGameActions } from './useGameActions';
 
 export const useRotationAnimation = () => {
     const dispatch = useDispatch();
@@ -12,6 +13,7 @@ export const useRotationAnimation = () => {
     const currentPlayer = useSelector((state: RootState) => state.game.currentPlayer);
     const { checkWin, checkDraw } = useGameLogic();
     const { animateStoneDrop } = useStoneDropAnimation();
+    const { checkGameResult } = useGameActions();
     const animationRef = useRef<number | null>(null);
 
     // ボードを回転する関数
@@ -108,21 +110,9 @@ export const useRotationAnimation = () => {
                         // アニメーション完了後の処理
                         // ボードの状態を更新
                         dispatch(setBoard(settledBoard));
-                        
-                        // 勝利判定
-                        const isWin = checkWin(settledBoard, currentPlayer);
-                        if (isWin) {
-                            dispatch(setGameStatus('won'));
-                        } else {
-                            // 引き分け判定
-                            const isDraw = checkDraw(settledBoard);
-                            if (isDraw) {
-                                dispatch(setGameStatus('draw'));
-                            } else {
-                                // 次の手番に変更
-                                dispatch(setCurrentPlayer(currentPlayer === 'red' ? 'yellow' : 'red'));
-                            }
-                        }
+
+                        // 共通の勝利判定処理を使用
+                        checkGameResult(settledBoard, currentPlayer);
                     });
 
                     // 回転アニメーション終了
