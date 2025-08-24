@@ -3,6 +3,7 @@
 import React from 'react';
 import { useDispatch } from 'react-redux';
 import { resetGame, setGameMode, GameMode } from './store/gameStore';
+import { resetOnlineGameState } from './store/onlineGameStore';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -10,9 +11,17 @@ export default function Home() {
     const dispatch = useDispatch();
 
     const handleStart = (mode: GameMode) => {
-            dispatch(setGameMode(mode));
+        dispatch(setGameMode(mode));
+
+        if (mode === 'online') {
+            // 全ての状態をリセット
+            dispatch(resetOnlineGameState());
+        } else {
+            // 通常のゲームの場合は、完全にリセット
             dispatch(resetGame());
-            router.push('/game');
+        }
+
+        router.push('/game');
     };
 
     return (
@@ -32,7 +41,10 @@ export default function Home() {
                 >
                     オフライン対戦
                 </button>
-                <button className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 px-8 rounded-lg text-xl transition-colors duration-200 w-64">
+                <button
+                    onClick={() => handleStart('online')}
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 px-8 rounded-lg text-xl transition-colors duration-200 w-64"
+                >
                     オンライン対戦
                 </button>
             </div>

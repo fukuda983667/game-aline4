@@ -1,6 +1,7 @@
 import { createSlice, configureStore } from '@reduxjs/toolkit';
+import onlineGameReducer from './onlineGameStore';
 
-export type GameMode = 'pvp' | 'cpu';
+export type GameMode = 'pvp' | 'cpu' | 'online';
 type Player = 'red' | 'yellow';
 type Cell = Player | null;
 type GameStatus = 'playing' | 'won' | 'draw';
@@ -139,7 +140,8 @@ export const { setGameMode, setBoard, setCurrentPlayer, setGameStatus, setAnimat
 
 export const store = configureStore({
     reducer: {
-        game: gameSlice.reducer
+        game: gameSlice.reducer,
+        onlineGame: onlineGameReducer
     }
 });
 
