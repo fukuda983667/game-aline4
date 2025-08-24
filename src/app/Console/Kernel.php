@@ -13,6 +13,9 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // $schedule->command('inspire')->hourly();
+        
+        // 30秒ごとに古い待機プレイヤーをクリーンアップ
+        $schedule->command('game:cleanup-waiting-players')->everyMinute();
     }
 
     /**
