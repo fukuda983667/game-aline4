@@ -154,3 +154,31 @@ export const getEmptyRow = (board: (string | null)[][], columnIndex: number): nu
     }
     return -1;
 };
+
+// ボードを回転
+export const rotateBoard = async (gameId: string, playerId: string, direction: 'left' | 'right'): Promise<{ success: boolean; game?: any; message?: string }> => {
+    try {
+        const response = await fetch('http://localhost:8080/api/game/rotate-board', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                game_id: gameId,
+                player_id: playerId,
+                direction: direction
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            return { success: true, game: data.game };
+        } else {
+            return { success: false, message: data.message || 'エラーが発生しました' };
+        }
+    } catch (error) {
+        console.error('ボード回転時にエラーが発生しました:', error);
+        return { success: false, message: 'サーバーとの接続に失敗しました' };
+    }
+};

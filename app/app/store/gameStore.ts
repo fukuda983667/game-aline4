@@ -24,7 +24,6 @@ interface AnimationState {
         endY: number;
     } | null;
     isRotating: boolean;
-    rotationSnapshot: Cell[][] | null;
     rotationDirection: 'left' | 'right' | null;
     currentRotation: number;
     isDroppingStones: boolean;
@@ -51,7 +50,6 @@ const initialState: GameState = {
         isAnimating: false,
         animatingStone: null,
         isRotating: false,
-        rotationSnapshot: null,
         rotationDirection: null,
         currentRotation: 0,
         isDroppingStones: false,
@@ -89,15 +87,17 @@ const gameSlice = createSlice({
             state.animation.isAnimating = false;
             state.animation.animatingStone = null;
         },
-        startRotationAnimation: (state, action: { payload: { direction: 'left' | 'right'; snapshot: Cell[][]; currentRotation?: number } }) => {
+        startRotationAnimation: (state, action: { payload: { direction: 'left' | 'right'; rotatedBoard: Cell[][]; currentRotation?: number } }) => {
             state.animation.isRotating = true;
-            state.animation.rotationSnapshot = action.payload.snapshot;
             state.animation.rotationDirection = action.payload.direction;
             state.animation.currentRotation = action.payload.currentRotation || 0;
+            state.animation.rotatedBoard = action.payload.rotatedBoard;
+        },
+        updateRotationProgress: (state, action: { payload: { currentRotation: number } }) => {
+            state.animation.currentRotation = action.payload.currentRotation;
         },
         endRotationAnimation: (state) => {
             state.animation.isRotating = false;
-            state.animation.rotationSnapshot = null;
             state.animation.rotationDirection = null;
             state.animation.currentRotation = 0;
         },
@@ -107,6 +107,9 @@ const gameSlice = createSlice({
             state.animation.rotatedBoard = action.payload.rotatedBoard;
             state.animation.settledBoard = action.payload.settledBoard;
             state.animation.dropProgress = action.payload.progress || 0;
+        },
+        updateStoneDropProgress: (state, action: { payload: { progress: number } }) => {
+            state.animation.dropProgress = action.payload.progress;
         },
         endStoneDropAnimation: (state) => {
             state.animation.isDroppingStones = false;
@@ -123,7 +126,6 @@ const gameSlice = createSlice({
                 isAnimating: false,
                 animatingStone: null,
                 isRotating: false,
-                rotationSnapshot: null,
                 rotationDirection: null,
                 currentRotation: 0,
                 isDroppingStones: false,
@@ -136,7 +138,7 @@ const gameSlice = createSlice({
     }
 });
 
-export const { setGameMode, setBoard, setCurrentPlayer, setGameStatus, setAnimationState, startStoneAnimation, endStoneAnimation, startRotationAnimation, endRotationAnimation, startStoneDropAnimation, endStoneDropAnimation, resetGame } = gameSlice.actions;
+export const { setGameMode, setBoard, setCurrentPlayer, setGameStatus, setAnimationState, startStoneAnimation, endStoneAnimation, startRotationAnimation, updateRotationProgress, endRotationAnimation, startStoneDropAnimation, updateStoneDropProgress, endStoneDropAnimation, resetGame } = gameSlice.actions;
 
 export const store = configureStore({
     reducer: {

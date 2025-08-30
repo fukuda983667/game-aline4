@@ -20,8 +20,10 @@ class GameMove implements ShouldBroadcast
     public $row;
     public $color;
     public $playerId; // プレイヤーIDを追加
+    public $rotated; // 回転フラグを追加
+    public $direction; // 回転方向を追加
 
-    public function __construct($gameId, $game, $column, $row, $color, $playerId)
+    public function __construct($gameId, $game, $column, $row, $color, $playerId, $rotated = false, $direction = null)
     {
         $this->gameId = $gameId;
         $this->game = $game;
@@ -29,6 +31,8 @@ class GameMove implements ShouldBroadcast
         $this->row = $row;
         $this->color = $color;
         $this->playerId = $playerId;
+        $this->rotated = $rotated;
+        $this->direction = $direction;
     }
 
     public function broadcastOn()
@@ -50,7 +54,9 @@ class GameMove implements ShouldBroadcast
                 'column' => $this->column,
                 'row' => $this->row,
                 'color' => $this->color,
-                'playerId' => $this->playerId
+                'playerId' => $this->playerId,
+                'rotated' => $this->rotated,
+                'direction' => $this->direction
             ]
         ];
     }

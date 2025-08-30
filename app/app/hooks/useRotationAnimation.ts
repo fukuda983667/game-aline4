@@ -1,10 +1,13 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../store/gameStore';
-import { startRotationAnimation, endRotationAnimation, setBoard, setCurrentPlayer, setGameStatus } from '../store/gameStore';
-import { useCallback, useRef } from 'react';
+import { RootState, startRotationAnimation, endRotationAnimation, setBoard, updateRotationProgress } from '../store/gameStore';
 import { useGameLogic } from './useGameLogic';
 import { useStoneDropAnimation } from './useStoneDropAnimation';
 import { useGameActions } from './useGameActions';
+import { useCallback, useRef } from 'react';
+import { rotateBoardMatrix, applyGravity } from '../lib/boardRotationUtils';
+
+// Cell型をgameStoreから取得
+type Cell = 'red' | 'yellow' | null;
 
 export const useRotationAnimation = () => {
     const dispatch = useDispatch();
@@ -16,63 +19,30 @@ export const useRotationAnimation = () => {
     const { checkGameResult } = useGameActions();
     const animationRef = useRef<number | null>(null);
 
-    // ボードを回転する関数
+    // ボードを回転する関数（共通処理を使用）
     const rotateBoard = useCallback((board: (string | null)[][], direction: 'left' | 'right'): (string | null)[][] => {
-        const rows = board.length;
-        const cols = board[0].length;
-        const rotated = Array(rows).fill(null).map(() => Array(cols).fill(null));
-
-        if (direction === 'left') {
-            // 左回転（反時計回り）
-            for (let i = 0; i < rows; i++) {
-                for (let j = 0; j < cols; j++) {
-                    rotated[i][j] = board[j][cols - 1 - i];
-                }
-            }
-        } else {
-            // 右回転（時計回り）
-            for (let i = 0; i < rows; i++) {
-                for (let j = 0; j < cols; j++) {
-                    rotated[i][j] = board[rows - 1 - j][i];
-                }
-            }
-        }
-
-        return rotated;
+        return rotateBoardMatrix(board, direction);
     }, []);
 
-    // 石を落下させる関数（重力効果）
-    const applyGravity = useCallback((board: (string | null)[][]): (string | null)[][] => {
-        const rows = board.length;
-        const cols = board[0].length;
-        const newBoard = Array(rows).fill(null).map(() => Array(cols).fill(null));
-
-        // 各列について下から上に向かって石を落下させる
-        for (let col = 0; col < cols; col++) {
-            let bottomRow = rows - 1;
-            for (let row = rows - 1; row >= 0; row--) {
-                if (board[row][col] !== null) {
-                    newBoard[bottomRow][col] = board[row][col];
-                    bottomRow--;
-                }
-            }
-        }
-
-        return newBoard;
+    // 石を落下させる関数（共通処理を使用）
+    const applyGravityToBoard = useCallback((board: (string | null)[][]): (string | null)[][] => {
+        return applyGravity(board);
     }, []);
 
+    // オフライン対戦用の回転アニメーション
     const animateRotation = useCallback((
         direction: 'left' | 'right',
         duration: number = 1000
     ) => {
-        // 現在のボードのスナップショットを取得
+        // 現在のボードのスナップショットを取得（回転前の状態）
         const snapshot = board.map(row => [...row]);
+
         const startTime = Date.now();
 
-        // 回転アニメーション開始
+        // 回転アニメーション開始（回転前のボードを保持）
         dispatch(startRotationAnimation({
             direction,
-            snapshot
+            rotatedBoard: snapshot
         }));
 
         // アニメーションループ
@@ -84,10 +54,8 @@ export const useRotationAnimation = () => {
             const easeOut = 1 - Math.pow(1 - progress, 3);
             const currentRotation = (direction === 'left' ? -90 : 90) * easeOut;
 
-            // アニメーション状態を更新
-            dispatch(startRotationAnimation({
-                direction,
-                snapshot,
+            // アニメーション状態を更新（currentRotationのみ）
+            dispatch(updateRotationProgress({
                 currentRotation
             }));
 
@@ -97,32 +65,149 @@ export const useRotationAnimation = () => {
                 // アニメーション完了後に実際の回転を実行
                 setTimeout(() => {
                     // 1. ボードを回転（落下は考慮しない）
-                    const rotatedBoard = rotateBoard(board, direction);
+                    const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
+                    console.log('rotatedBoard', rotatedBoard);
 
                     // 2. 回転後の盤面に落下を適用
-                    const settledBoard = applyGravity(rotatedBoard);
+                    const settledBoard = applyGravityToBoard(rotatedBoard);
+                    console.log('settledBoard', settledBoard);
 
-                    console.log('Rotated board:', rotatedBoard); // デバッグ用
-                    console.log('Settled board:', settledBoard); // デバッグ用
+                    // 回転アニメーション終了
+                    dispatch(endRotationAnimation());
 
                     // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
                     animateStoneDrop(rotatedBoard, settledBoard, () => {
                         // アニメーション完了後の処理
-                        // ボードの状態を更新
+                        // ボードの状態を更新（落下アニメーション完了後）
                         dispatch(setBoard(settledBoard));
 
                         // 共通の勝利判定処理を使用
                         checkGameResult(settledBoard, currentPlayer);
                     });
-
-                    // 回転アニメーション終了
-                    dispatch(endRotationAnimation());
                 }, 300); // 300msに延長（より自然なタイミング）
             }
         };
 
         animationRef.current = requestAnimationFrame(animate);
-    }, [dispatch, board, rotateBoard, applyGravity, currentPlayer, checkWin, checkDraw, animateStoneDrop]);
+    }, [dispatch, board, rotateBoard, applyGravityToBoard, currentPlayer, checkWin, checkDraw, animateStoneDrop]);
+
+    // オンライン対戦用の回転アニメーション（相手の回転を表示）
+    const animateOnlineRotation = useCallback((
+        direction: 'left' | 'right',
+        currentBoard: Cell[][],
+        onComplete?: () => void,
+        duration: number = 1000
+    ) => {
+        // 引数として渡されたボードのスナップショットを取得
+        const snapshot = currentBoard.map(row => [...row]);
+        
+        const startTime = Date.now();
+
+        // 回転アニメーション開始（回転前のボードを保持）
+        dispatch(startRotationAnimation({
+            direction,
+            rotatedBoard: snapshot
+        }));
+
+        // アニメーションループ
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // ease-out関数でアニメーション
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            const currentRotation = (direction === 'left' ? -90 : 90) * easeOut;
+
+            // アニメーション状態を更新（currentRotationのみ）
+            dispatch(updateRotationProgress({
+                currentRotation
+            }));
+
+            if (progress < 1) {
+                animationRef.current = requestAnimationFrame(animate);
+            } else {
+                // アニメーション完了後に実際の回転を実行
+                setTimeout(() => {
+                    // 1. ボードを回転（落下は考慮しない）
+                    const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
+                    
+                    // 2. 回転後の盤面に落下を適用
+                    const settledBoard = applyGravityToBoard(rotatedBoard);
+
+                    // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
+                    animateStoneDrop(rotatedBoard, settledBoard, () => {
+                        // アニメーション完了後の処理
+                        // オンライン対戦では新しい盤面を直接設定（落下アニメーション完了後）
+                        dispatch(setBoard(settledBoard));
+
+                        // コールバックが指定されている場合は実行
+                        if (onComplete) {
+                            onComplete();
+                        }
+
+                        // 回転アニメーション終了
+                        dispatch(endRotationAnimation());
+                    });
+                }, 300); // 300msに延長（より自然なタイミング）
+            }
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+    }, [dispatch, rotateBoard, applyGravityToBoard, animateStoneDrop]);
+
+    // オンライン対戦用の自分の回転アニメーション
+    const animateMyOnlineRotation = useCallback((
+        direction: 'left' | 'right',
+        duration: number = 1000
+    ) => {
+        // 現在のボードのスナップショットを取得
+        const snapshot = board.map(row => [...row]);
+        
+        const startTime = Date.now();
+
+        // 回転アニメーション開始（回転前のボードを保持）
+        dispatch(startRotationAnimation({
+            direction,
+            rotatedBoard: snapshot
+        }));
+
+        // アニメーションループ
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // ease-out関数でアニメーション
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            const currentRotation = (direction === 'left' ? -90 : 90) * easeOut;
+
+            // アニメーション状態を更新（currentRotationのみ）
+            dispatch(updateRotationProgress({
+                currentRotation
+            }));
+
+            if (progress < 1) {
+                animationRef.current = requestAnimationFrame(animate);
+            } else {
+                // アニメーション完了後に実際の回転を実行
+                setTimeout(() => {
+                    // 1. ボードを回転（落下は考慮しない）
+                    const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
+                    
+                    // 2. 回転後の盤面に落下を適用
+                    const settledBoard = applyGravityToBoard(rotatedBoard);
+
+                    // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
+                    animateStoneDrop(rotatedBoard, settledBoard, () => {
+                        // アニメーション完了後の処理
+                        // 回転アニメーション終了（落下アニメーション完了後）
+                        dispatch(endRotationAnimation());
+                    });
+                }, 300); // 300msに延長（より自然なタイミング）
+            }
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+    }, [dispatch, board, rotateBoard, applyGravityToBoard, animateStoneDrop]);
 
     // クリーンアップ
     const cleanup = useCallback(() => {
@@ -134,6 +219,8 @@ export const useRotationAnimation = () => {
     return {
         animation,
         animateRotation,
+        animateOnlineRotation,
+        animateMyOnlineRotation,
         cleanup
     };
 };

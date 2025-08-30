@@ -128,17 +128,23 @@ class GameController extends Controller
 
     public function makeMove(Request $request): JsonResponse
     {
-        $gameId = $request->input('game_id');
-        $playerId = $request->input('player_id');
-        $column = $request->input('column');
+        try {
+            $gameId = $request->input('game_id');
+            $playerId = $request->input('player_id');
+            $column = $request->input('column');
 
-        $activeGames = $this->getActiveGames();
+            // 入力値の検証
+            if (!$gameId || !$playerId || $column === null) {
+                return response()->json(['success' => false, 'message' => '必要なパラメータが不足しています'], 400);
+            }
 
-        if (!isset($activeGames[$gameId])) {
-            return response()->json(['success' => false, 'message' => 'ゲームが見つかりません'], 404);
-        }
+            $activeGames = $this->getActiveGames();
 
-        $game = $activeGames[$gameId];
+            if (!isset($activeGames[$gameId])) {
+                return response()->json(['success' => false, 'message' => 'ゲームが見つかりません'], 404);
+            }
+
+            $game = $activeGames[$gameId];
 
         // プレイヤーの順番をチェック
         $currentPlayerColor = $game['current_player'];
@@ -170,7 +176,7 @@ class GameController extends Controller
         $this->setActiveGames($activeGames);
 
         // 他のプレイヤーに手を通知
-        broadcast(new GameMove($gameId, $game, $column, $row, $playerColor, $playerId))->toOthers();
+        broadcast(new GameMove($gameId, $game, $column, $row, $playerColor, $playerId, false))->toOthers();
 
         return response()->json([
             'success' => true,
@@ -181,6 +187,18 @@ class GameController extends Controller
                 'color' => $playerColor
             ]
         ]);
+        } catch (\Exception $e) {
+            \Log::error('makeMoveでエラーが発生しました', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            
+            return response()->json([
+                'success' => false, 
+                'message' => 'サーバー内部エラーが発生しました: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function getGameState(Request $request): JsonResponse
@@ -196,6 +214,68 @@ class GameController extends Controller
         return response()->json([
             'success' => true,
             'game' => $activeGames[$gameId]
+        ]);
+    }
+
+    public function rotateBoard(Request $request): JsonResponse
+    {
+        $gameId = $request->input('game_id');
+        $playerId = $request->input('player_id');
+        $direction = $request->input('direction'); // 'left' or 'right'
+
+        $activeGames = $this->getActiveGames();
+
+        if (!isset($activeGames[$gameId])) {
+            return response()->json(['success' => false, 'message' => 'ゲームが見つかりません'], 404);
+        }
+
+        $game = $activeGames[$gameId];
+
+        // プレイヤーの順番をチェック
+        $currentPlayerColor = $game['current_player'];
+        $playerColor = $this->getPlayerColor($game, $playerId);
+
+        if ($playerColor !== $currentPlayerColor) {
+            return response()->json(['success' => false, 'message' => 'あなたのターンではありません'], 400);
+        }
+
+                // ボードを回転
+        $rotatedBoard = $this->rotateBoardMatrix($game['board'], $direction);
+
+        // 重力を適用して石を落下
+        $settledBoard = $this->applyGravity($rotatedBoard);
+
+        // デバッグ用ログ
+        \Log::info('ボード回転処理', [
+            'direction' => $direction,
+            'original_board' => $game['board'],
+            'rotated_board' => $rotatedBoard,
+            'settled_board' => $settledBoard
+        ]);
+
+        // ゲーム状態を更新
+        $game['board'] = $settledBoard;
+
+        // 手番を交代
+        $game['current_player'] = $currentPlayerColor === 'red' ? 'yellow' : 'red';
+
+        $activeGames[$gameId] = $game;
+        $this->setActiveGames($activeGames);
+
+        // 他のプレイヤーに回転を通知
+        broadcast(new GameMove($gameId, $game, null, null, $playerColor, $playerId, true, $direction))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'game' => $game,
+            'move' => [
+                'column' => null,
+                'row' => null,
+                'color' => $playerColor,
+                'playerId' => $playerId,
+                'rotated' => true,
+                'direction' => $direction
+            ]
         ]);
     }
 
@@ -347,5 +427,71 @@ class GameController extends Controller
                 'after' => count($cleanedPlayers)
             ]);
         }
+    }
+
+    private function rotateBoardMatrix(array $board, string $direction): array
+    {
+        $rows = count($board);
+        $cols = count($board[0]);
+        $rotated = [];
+
+        if ($direction === 'left') {
+            // 左回転（90度反時計回り）
+            for ($row = 0; $row < $rows; $row++) {
+                $rotated[$row] = [];
+                for ($col = 0; $col < $cols; $col++) {
+                    $rotated[$row][$col] = $board[$col][$rows - 1 - $row];
+                }
+            }
+        } else {
+            // 右回転（90度時計回り）
+            for ($row = 0; $row < $rows; $row++) {
+                $rotated[$row] = [];
+                for ($col = 0; $col < $cols; $col++) {
+                    $rotated[$row][$col] = $board[$cols - 1 - $col][$row];
+                }
+            }
+        }
+
+        return $rotated;
+    }
+
+    private function applyGravity(array $board): array
+    {
+        $rows = count($board);
+        $cols = count($board[0]);
+        $result = [];
+
+        // 各行をコピー
+        for ($row = 0; $row < $rows; $row++) {
+            $result[$row] = [];
+            for ($col = 0; $col < $cols; $col++) {
+                $result[$row][$col] = $board[$row][$col];
+            }
+        }
+
+        // 各列に対して重力を適用
+        for ($col = 0; $col < $cols; $col++) {
+            $stones = [];
+
+            // 下から上に向かって石を収集
+            for ($row = $rows - 1; $row >= 0; $row--) {
+                if ($result[$row][$col] !== null) {
+                    $stones[] = $result[$row][$col];
+                }
+            }
+
+            // 石を下から配置
+            $stoneCount = count($stones);
+            for ($row = $rows - 1; $row >= 0; $row--) {
+                if ($row >= $rows - $stoneCount) {
+                    $result[$row][$col] = $stones[$rows - 1 - $row];
+                } else {
+                    $result[$row][$col] = null;
+                }
+            }
+        }
+
+        return $result;
     }
 }

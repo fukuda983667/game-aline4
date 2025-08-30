@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::prefix('game')->group(function () {
     Route::post('/find-match', [GameController::class, 'findMatch']);
     Route::post('/make-move', [GameController::class, 'makeMove']);
+    Route::post('/rotate-board', [GameController::class, 'rotateBoard']);
     Route::get('/state', [GameController::class, 'getGameState']);
     Route::post('/leave', [GameController::class, 'leaveGame']);
 });

@@ -13,6 +13,7 @@ import {
     type OnlinePlayer
 } from '../lib/onlineGameFunctions';
 import { useStoneAnimation } from './useStoneAnimation';
+import { useRotationAnimation } from './useRotationAnimation';
 import {
     setMyPlayerInfo,
     updatePlayerName as updatePlayerNameAction,
@@ -32,6 +33,7 @@ export const useOnlineGameLogic = () => {
     const onlineGame = useSelector((state: RootState) => state.onlineGame);
     const pusherRef = useRef<any>(null);
     const { animateStoneDrop } = useStoneAnimation();
+    const { animateOnlineRotation, animateMyOnlineRotation } = useRotationAnimation();
 
     // プレイヤーを初期化
     const initializePlayer = useCallback((name: string) => {
@@ -148,14 +150,40 @@ export const useOnlineGameLogic = () => {
 
             const shouldAnimateAndUpdate = !isMyMove; // 相手が手を打った場合にアニメーション実行
 
-            console.log('myPlayerId:', onlineGame.myPlayerId);
-            console.log('currentPlayerId:', currentPlayerId);
-            console.log('isCurrentlyMyTurn:', isCurrentlyMyTurn);
-            console.log('isMyMove:' + isMyMove, 'isCurrentlyMyTurn:' + isCurrentlyMyTurn, 'shouldAnimateAndUpdate:' + shouldAnimateAndUpdate);
-
             if (shouldAnimateAndUpdate && data.game && data.game.board) {
-                // 相手が打った石の情報を直接取得
                 const moveData = data.move;
+
+                // 回転イベントの処理
+                if (moveData && moveData.rotated) {
+                    console.log('相手がボードを回転しました');
+
+                    // 回転方向を取得（moveDataから方向を取得）
+                    const direction = moveData.direction;
+
+                    if (!direction) {
+                        console.warn('回転方向が指定されていません。デフォルトで左回転として処理します。');
+                    }
+
+                    // お互い見ている盤面は同じなので、回転方向も同じにする
+                    // プレイヤーの色による方向調整は不要
+                    const rotationDirection = direction || 'left'; // デフォルト値として左回転を使用
+
+                    console.log(`回転方向: ${rotationDirection}`);
+
+                    // 回転アニメーションを実行（現在の盤面を渡す）
+                    animateOnlineRotation(rotationDirection, onlineGame.board, () => {
+                        // アニメーション完了後に盤面更新を実行
+                        dispatch(updateBoard({
+                            board: data.game.board,
+                            currentPlayer: data.game.current_player,
+                            status: data.game.status,
+                            winner: data.game.winner
+                        }));
+                    });
+                    return;
+                }
+
+                // 石を置いたイベントの処理
                 if (moveData && moveData.column !== undefined && moveData.row !== undefined && moveData.color) {
                     console.log('相手が打った石の情報:', moveData);
 
@@ -246,6 +274,8 @@ export const useOnlineGameLogic = () => {
         getEmptyRow: getEmptyRowProcess,
         clearError: clearErrorProcess,
         pusherRef,
-        animateStoneDrop
+        animateStoneDrop,
+        animateOnlineRotation,
+        animateMyOnlineRotation
     };
 };

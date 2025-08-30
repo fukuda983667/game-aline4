@@ -10,6 +10,7 @@ import { useStoneAnimation } from '../hooks/useStoneAnimation';
 import { useRotationAnimation } from '../hooks/useRotationAnimation';
 import { useOnlineGameLogic } from '../hooks/useOnlineGameLogic';
 import { createPusherInstance } from '../lib/pusher';
+import { rotateBoard } from '../lib/onlineGameFunctions';
 import { useRouter } from 'next/navigation';
 
 export default function GamePage() {
@@ -41,7 +42,9 @@ export default function GamePage() {
         isMyTurn,
         getEmptyRow: getOnlineEmptyRow,
         clearError,
-        pusherRef
+        pusherRef,
+        animateOnlineRotation,
+        animateMyOnlineRotation
     } = useOnlineGameLogic();
 
     // ゲーム状態を設定する関数を取得
@@ -72,7 +75,6 @@ export default function GamePage() {
     // オンライン対戦のゲーム終了時の遷移
     useEffect(() => {
         if (gameMode === 'online' && (onlineGame.status === 'won' || onlineGame.status === 'draw')) {
-            console.log('オンライン対戦終了検知:', { status: onlineGame.status, winner: onlineGame.winner }); // デバッグ用
             router.push('/game/result');
         }
     }, [gameMode, onlineGame.status, router]);
@@ -93,10 +95,8 @@ export default function GamePage() {
             const waitingChannel = pusherInstance.subscribe('waiting-players');
 
             waitingChannel.bind('game.start', (data: any) => {
-                console.log('GameStartイベント受信 (待機チャンネル):', data); // デバッグ用
                 // マッチング完了時の処理
                 if (data.game && onlineGame.myPlayerId && data.game.players[onlineGame.myPlayerId]) {
-                    console.log('このプレイヤーが参加するゲームが開始されました'); // デバッグ用
 
                     // ゲームの状態を完全に更新
                     setGameState(data.game);
@@ -180,6 +180,7 @@ export default function GamePage() {
             stone => stone.startRow === rowIndex && stone.col === colIndex
         );
 
+
         if (!droppingStone) {
             return null;
         }
@@ -208,58 +209,67 @@ export default function GamePage() {
 
     // 落下アニメーション中に石を表示するかどうかを判定
     const shouldShowStone = (rowIndex: number, colIndex: number, cell: string | null) => {
-        if (!animation.isDroppingStones || !animation.droppingStones) {
-            return cell !== null;
+    // 回転アニメーション中または落下アニメーション中は、回転後の盤面を基準にする
+    if ((animation.isRotating || animation.isDroppingStones) && animation.rotatedBoard) {
+        const rotatedCell = animation.rotatedBoard[rowIndex][colIndex];
+        return rotatedCell !== null;
+    }
+
+        // 落下アニメーション中は、落下中の石の情報を基準にする
+        if (animation.isDroppingStones && animation.droppingStones) {
+            // このセルに落下中の石があるかチェック
+            const droppingStone = animation.droppingStones.find(
+                stone => stone.col === colIndex && stone.startRow === rowIndex
+            );
+
+            if (droppingStone) {
+                return true; // 落下中の石の開始位置を表示
+            }
+
+            // 落下後の盤面で石があるかチェック
+            if (animation.settledBoard) {
+                return animation.settledBoard[rowIndex][colIndex] !== null;
+            }
         }
 
-        // 落下アニメーション中は、回転後の盤面（rotatedBoard）を基準にする
-        if (animation.rotatedBoard) {
-            // 回転後の盤面で石がある場合は表示
-            return animation.rotatedBoard[rowIndex][colIndex] !== null;
-        }
-
-        // 回転後の盤面がない場合は、落下中の石の開始位置を基準にする
-        const droppingStone = animation.droppingStones.find(
-            stone => stone.startRow === rowIndex && stone.col === colIndex
-        );
-
-        if (droppingStone) {
-            return true; // 落下中の石を表示
-        }
-
-        // 落下後の盤面で石がある場合は表示
+        // 通常の表示
         return cell !== null;
     };
 
     const getStoneColor = (rowIndex: number, colIndex: number, cell: string | null) => {
-        if (!animation.isDroppingStones || !animation.droppingStones) {
-            return cell === 'red' ? 'bg-red-500' : 'bg-yellow-500';
-        }
-
-        // 落下アニメーション中は、回転後の盤面（rotatedBoard）を基準にする
-        if (animation.rotatedBoard) {
+        // 回転アニメーション中は、回転後の盤面を基準にする
+        if (animation.isRotating && animation.rotatedBoard) {
             const rotatedCell = animation.rotatedBoard[rowIndex][colIndex];
             if (rotatedCell !== null) {
                 return rotatedCell === 'red' ? 'bg-red-500' : 'bg-yellow-500';
             }
         }
 
-        // 回転後の盤面がない場合は、落下中の石のplayerプロパティを使用
-        const droppingStone = animation.droppingStones.find(
-            stone => stone.startRow === rowIndex && stone.col === colIndex
-        );
+        // 落下アニメーション中は、落下中の石のplayerプロパティを使用
+        if (animation.isDroppingStones && animation.droppingStones) {
+            const droppingStone = animation.droppingStones.find(
+                stone => stone.col === colIndex && stone.startRow === rowIndex
+            );
 
-        if (droppingStone) {
-            // 落下中の石は、droppingStoneのplayerプロパティを使用
-            return droppingStone.player === 'red' ? 'bg-red-500' : 'bg-yellow-500';
+            if (droppingStone) {
+                return droppingStone.player === 'red' ? 'bg-red-500' : 'bg-yellow-500';
+            }
+
+            // 落下後の盤面で石がある場合は、その色を使用
+            if (animation.settledBoard) {
+                const settledCell = animation.settledBoard[rowIndex][colIndex];
+                if (settledCell !== null) {
+                    return settledCell === 'red' ? 'bg-red-500' : 'bg-yellow-500';
+                }
+            }
         }
 
+        // 通常の色の決定
         return cell === 'red' ? 'bg-red-500' : 'bg-yellow-500';
     };
 
     // オンライン対戦のセットアップ画面
     if (gameMode === 'online' && (showOnlineSetup || onlineGame.status === 'waiting')) {
-        console.log('セットアップ画面表示:', { showOnlineSetup, status: onlineGame.status, id: onlineGame.id }); // デバッグ用
         return (
             <div className="container mx-auto py-8">
                 <div className="flex flex-col items-center justify-center p-8">
@@ -360,7 +370,20 @@ export default function GamePage() {
                 {/* 回転ボタン（標準機能） */}
                 <div className="flex items-center gap-24 mb-4">
                     <button
-                        onClick={() => animateRotation('left')}
+                        onClick={() => {
+                            if (gameMode === 'online' && onlineGame.status === 'playing') {
+                                // オンライン対戦の回転処理
+                                if (isMyTurn()) {
+                                    // 自分の回転アニメーションを実行
+                                    animateMyOnlineRotation('left');
+                                    // 回転APIを呼び出し
+                                    rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'left');
+                                }
+                            } else {
+                                // ローカル対戦の回転処理
+                                animateRotation('left');
+                            }
+                        }}
                         className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
                         title="ボードを90度左回転"
                         disabled={animation.isRotating || animation.isDroppingStones}
@@ -368,7 +391,20 @@ export default function GamePage() {
                         <img src="/assets/images/game/icons/left-rotation.png" alt="左回転" className="w-8 h-8" />
                     </button>
                     <button
-                        onClick={() => animateRotation('right')}
+                        onClick={() => {
+                            if (gameMode === 'online' && onlineGame.status === 'playing') {
+                                // オンライン対戦の回転処理
+                                if (isMyTurn()) {
+                                    // 自分の回転アニメーションを実行
+                                    animateMyOnlineRotation('right');
+                                    // 回転APIを呼び出し
+                                    rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'right');
+                                }
+                            } else {
+                                // ローカル対戦の回転処理
+                                animateRotation('right');
+                            }
+                        }}
                         className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
                         title="ボードを90度右回転"
                         disabled={animation.isRotating || animation.isDroppingStones}
@@ -402,8 +438,8 @@ export default function GamePage() {
                     >
                         {/* ゲームモードとアニメーション状態に応じてボードデータを選択 */}
                         {(gameMode === 'online' && onlineGame.status === 'playing' ?
-                        (animation.isRotating && animation.rotationSnapshot ? animation.rotationSnapshot : onlineGame.board) :
-                        (animation.isRotating && animation.rotationSnapshot ? animation.rotationSnapshot : displayBoard)).map((row, rowIndex) => (
+                        (animation.isRotating && animation.rotatedBoard ? animation.rotatedBoard : onlineGame.board) :
+                        (animation.isRotating && animation.rotatedBoard ? animation.rotatedBoard : displayBoard)).map((row, rowIndex) => (
                             row.map((cell, colIndex) => (
                                 <div
                                     key={`${rowIndex}-${colIndex}`}
@@ -457,7 +493,7 @@ export default function GamePage() {
                                         <div
                                             className={`w-14 h-14 rounded-full ${getStoneColor(rowIndex, colIndex, cell)} absolute top-1 left-1`}
                                             style={{
-                                                ...getDroppingStonePosition(rowIndex, colIndex),
+                                                ...(getDroppingStonePosition(rowIndex, colIndex) || {}),
                                                 zIndex: 10
                                             }}
                                         />
