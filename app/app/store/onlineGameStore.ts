@@ -69,7 +69,7 @@ const onlineGameSlice = createSlice({
             state.winner = action.payload.winner;
             state.isSearching = false;
             state.error = null;
-            
+
             // 自分の色を設定
             if (state.myPlayerId && action.payload.players[state.myPlayerId]) {
                 state.myPlayerColor = action.payload.players[state.myPlayerId].color;

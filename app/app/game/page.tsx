@@ -367,6 +367,7 @@ export default function GamePage() {
 
 
 
+
                 {/* 回転ボタン（標準機能） */}
                 <div className="flex items-center gap-24 mb-4">
                     <button

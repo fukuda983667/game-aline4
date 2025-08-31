@@ -1,11 +1,12 @@
 import { useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../store/gameStore';
-import { 
-    generatePlayerId, 
-    startMatchmaking, 
-    makeMove, 
-    leaveGame, 
+import { RootState ,store } from '../store/gameStore';
+type Cell = 'red' | 'yellow' | null;
+import {
+    generatePlayerId,
+    startMatchmaking,
+    makeMove,
+    leaveGame,
     initializePusherConnection,
     getPlayerColor,
     isMyTurn,
@@ -31,6 +32,7 @@ import {
 export const useOnlineGameLogic = () => {
     const dispatch = useDispatch();
     const onlineGame = useSelector((state: RootState) => state.onlineGame);
+    const game = useSelector((state: RootState) => state.game);
     const pusherRef = useRef<any>(null);
     const { animateStoneDrop } = useStoneAnimation();
     const { animateOnlineRotation, animateMyOnlineRotation } = useRotationAnimation();
@@ -90,7 +92,7 @@ export const useOnlineGameLogic = () => {
         console.log('GameStartイベント受信:', gameData); // デバッグ用
         console.log('自分のプレイヤーID:', onlineGame.myPlayerId);
         console.log('プレイヤー情報:', gameData.players);
-        
+
         dispatch(setGameState({
             id: gameData.id,
             players: gameData.players,
@@ -136,17 +138,13 @@ export const useOnlineGameLogic = () => {
 
         const onGameMove = (data: any) => {
             console.log('GameMoveイベント受信:', data); // デバッグ用
+            const currentOnlineGame = store.getState().onlineGame;
+            console.log('最新のonlineGame状態:', currentOnlineGame);
 
             // アニメーションの実行と盤面の更新をするかしないかの判定
             // 自分の手番になっているということは、相手が手を打ったということ
             // ただし、自分が手を打った場合はアニメーションを実行しない
             const isMyMove = data.move && data.move.playerId === onlineGame.myPlayerId;
-
-            // 現在のプレイヤーが自分かどうかを判定
-            const currentPlayerId = Object.keys(data.game.players).find(
-                playerId => data.game.players[playerId].color === data.game.current_player
-            );
-            const isCurrentlyMyTurn = currentPlayerId === onlineGame.myPlayerId;
 
             const shouldAnimateAndUpdate = !isMyMove; // 相手が手を打った場合にアニメーション実行
 
@@ -171,7 +169,7 @@ export const useOnlineGameLogic = () => {
                     console.log(`回転方向: ${rotationDirection}`);
 
                     // 回転アニメーションを実行（現在の盤面を渡す）
-                    animateOnlineRotation(rotationDirection, onlineGame.board, () => {
+                    animateOnlineRotation(rotationDirection, store.getState().onlineGame.board as Cell[][], () => {
                         // アニメーション完了後に盤面更新を実行
                         dispatch(updateBoard({
                             board: data.game.board,
@@ -179,6 +177,7 @@ export const useOnlineGameLogic = () => {
                             status: data.game.status,
                             winner: data.game.winner
                         }));
+                        console.log('ストアの全状態:', onlineGame);
                     });
                     return;
                 }

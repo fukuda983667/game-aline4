@@ -193,7 +193,7 @@ class GameController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'request' => $request->all()
             ]);
-            
+
             return response()->json([
                 'success' => false, 
                 'message' => 'サーバー内部エラーが発生しました: ' . $e->getMessage()
@@ -239,7 +239,7 @@ class GameController extends Controller
             return response()->json(['success' => false, 'message' => 'あなたのターンではありません'], 400);
         }
 
-                // ボードを回転
+        // ボードを回転
         $rotatedBoard = $this->rotateBoardMatrix($game['board'], $direction);
 
         // 重力を適用して石を落下
@@ -256,8 +256,38 @@ class GameController extends Controller
         // ゲーム状態を更新
         $game['board'] = $settledBoard;
 
-        // 手番を交代
-        $game['current_player'] = $currentPlayerColor === 'red' ? 'yellow' : 'red';
+        // 回転後の盤面で勝利判定を実行
+        $winner = null;
+        $gameStatus = 'playing';
+
+        // 全セルをチェックして勝利判定
+        for ($row = 0; $row < 7; $row++) {
+            for ($col = 0; $col < 7; $col++) {
+                if ($settledBoard[$row][$col] !== null) {
+                    if ($this->checkWin($settledBoard, $row, $col, $settledBoard[$row][$col])) {
+                        $winner = $settledBoard[$row][$col];
+                        $gameStatus = 'won';
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // 引き分け判定（勝利がない場合）
+        if ($gameStatus !== 'won' && $this->checkDraw($settledBoard)) {
+            $gameStatus = 'draw';
+        }
+
+        // ゲーム状態を更新
+        $game['status'] = $gameStatus;
+        if ($winner) {
+            $game['winner'] = $winner;
+        }
+
+        // 手番を交代（ゲームが終了していない場合のみ）
+        if ($gameStatus === 'playing') {
+            $game['current_player'] = $currentPlayerColor === 'red' ? 'yellow' : 'red';
+        }
 
         $activeGames[$gameId] = $game;
         $this->setActiveGames($activeGames);

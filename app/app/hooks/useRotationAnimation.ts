@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState, startRotationAnimation, endRotationAnimation, setBoard, updateRotationProgress } from '../store/gameStore';
+import { RootState, startRotationAnimation, endRotationAnimation, setBoard, updateRotationProgress,store } from '../store/gameStore';
 import { useGameLogic } from './useGameLogic';
 import { useStoneDropAnimation } from './useStoneDropAnimation';
 import { useGameActions } from './useGameActions';
@@ -100,7 +100,8 @@ export const useRotationAnimation = () => {
     ) => {
         // 引数として渡されたボードのスナップショットを取得
         const snapshot = currentBoard.map(row => [...row]);
-        
+        console.log('snapshot', snapshot);
+
         const startTime = Date.now();
 
         // 回転アニメーション開始（回転前のボードを保持）
@@ -130,9 +131,14 @@ export const useRotationAnimation = () => {
                 setTimeout(() => {
                     // 1. ボードを回転（落下は考慮しない）
                     const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
-                    
+                    console.log('rotatedBoard', rotatedBoard);
+
                     // 2. 回転後の盤面に落下を適用
                     const settledBoard = applyGravityToBoard(rotatedBoard);
+                    console.log('settledBoard', settledBoard);
+
+                    // 回転アニメーション終了
+                    dispatch(endRotationAnimation());
 
                     // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
                     animateStoneDrop(rotatedBoard, settledBoard, () => {
@@ -145,8 +151,7 @@ export const useRotationAnimation = () => {
                             onComplete();
                         }
 
-                        // 回転アニメーション終了
-                        dispatch(endRotationAnimation());
+
                     });
                 }, 300); // 300msに延長（より自然なタイミング）
             }
@@ -161,8 +166,10 @@ export const useRotationAnimation = () => {
         duration: number = 1000
     ) => {
         // 現在のボードのスナップショットを取得
-        const snapshot = board.map(row => [...row]);
-        
+        const currentOnlineGame = store.getState().onlineGame;
+        const snapshot = currentOnlineGame.board as Cell[][];
+        console.log('snapshot', snapshot);
+
         const startTime = Date.now();
 
         // 回転アニメーション開始（回転前のボードを保持）
@@ -192,16 +199,17 @@ export const useRotationAnimation = () => {
                 setTimeout(() => {
                     // 1. ボードを回転（落下は考慮しない）
                     const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
-                    
+                    console.log('rotatedBoard', rotatedBoard);
+
                     // 2. 回転後の盤面に落下を適用
                     const settledBoard = applyGravityToBoard(rotatedBoard);
+                    console.log('settledBoard', settledBoard);
+
+                    // 回転アニメーション終了（落下アニメーション完了後）
+                    dispatch(endRotationAnimation());
 
                     // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
-                    animateStoneDrop(rotatedBoard, settledBoard, () => {
-                        // アニメーション完了後の処理
-                        // 回転アニメーション終了（落下アニメーション完了後）
-                        dispatch(endRotationAnimation());
-                    });
+                    animateStoneDrop(rotatedBoard, settledBoard);
                 }, 300); // 300msに延長（より自然なタイミング）
             }
         };
