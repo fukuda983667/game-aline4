@@ -35,7 +35,7 @@ export const useOnlineGameLogic = () => {
     const game = useSelector((state: RootState) => state.game);
     const pusherRef = useRef<any>(null);
     const { animateStoneDrop } = useStoneAnimation();
-    const { animateOnlineRotation, animateMyOnlineRotation } = useRotationAnimation();
+    const { animateOnlineRotation } = useRotationAnimation();
 
     // プレイヤーを初期化
     const initializePlayer = useCallback((name: string) => {
@@ -112,16 +112,11 @@ export const useOnlineGameLogic = () => {
 
         const result = await makeMove(onlineGame.id, onlineGame.myPlayerId, columnIndex);
 
-        if (result.success && result.game) {
+        if (result.success) {
             console.log('makeMove成功:', result.game); // デバッグ用
-            // ゲームの状態を完全に更新（勝利判定後の状態も含む）
-            dispatch(updateBoard({
-                board: result.game.board,
-                currentPlayer: result.game.current_player,
-                status: result.game.status,
-                winner: result.game.winner
-            }));
-            console.log('makeMove後の状態更新完了'); // デバッグ用
+            // 自分の手の場合は即座にボードを更新しない
+            // WebSocketのGameMoveイベントを受信してからアニメーションを実行する
+            console.log('makeMove完了、WebSocketイベント待機中...'); // デバッグ用
         } else {
             dispatch(setError(result.message || 'エラーが発生しました'));
         }
@@ -141,35 +136,20 @@ export const useOnlineGameLogic = () => {
             const currentOnlineGame = store.getState().onlineGame;
             console.log('最新のonlineGame状態:', currentOnlineGame);
 
-            // アニメーションの実行と盤面の更新をするかしないかの判定
-            // 自分の手番になっているということは、相手が手を打ったということ
-            // ただし、自分が手を打った場合はアニメーションを実行しない
+            // 自分と相手の手を区別
             const isMyMove = data.move && data.move.playerId === onlineGame.myPlayerId;
+            console.log('自分の手かどうか:', isMyMove, 'playerId:', data.move?.playerId, 'myPlayerId:', onlineGame.myPlayerId);
 
-            const shouldAnimateAndUpdate = !isMyMove; // 相手が手を打った場合にアニメーション実行
-
-            if (shouldAnimateAndUpdate && data.game && data.game.board) {
+            if (data.game && data.game.board) {
                 const moveData = data.move;
 
                 // 回転イベントの処理
                 if (moveData && moveData.rotated) {
-                    console.log('相手がボードを回転しました');
+                    const direction = moveData.direction || 'left';
+                    console.log(`${isMyMove ? '自分' : '相手'}がボードを回転しました。方向: ${direction}`);
 
-                    // 回転方向を取得（moveDataから方向を取得）
-                    const direction = moveData.direction;
-
-                    if (!direction) {
-                        console.warn('回転方向が指定されていません。デフォルトで左回転として処理します。');
-                    }
-
-                    // お互い見ている盤面は同じなので、回転方向も同じにする
-                    // プレイヤーの色による方向調整は不要
-                    const rotationDirection = direction || 'left'; // デフォルト値として左回転を使用
-
-                    console.log(`回転方向: ${rotationDirection}`);
-
-                    // 回転アニメーションを実行（現在の盤面を渡す）
-                    animateOnlineRotation(rotationDirection, store.getState().onlineGame.board as Cell[][], () => {
+                    // 回転アニメーションを実行（自分と相手共通）
+                    animateOnlineRotation(direction, store.getState().onlineGame.board as Cell[][], () => {
                         // アニメーション完了後に盤面更新を実行
                         dispatch(updateBoard({
                             board: data.game.board,
@@ -177,21 +157,19 @@ export const useOnlineGameLogic = () => {
                             status: data.game.status,
                             winner: data.game.winner
                         }));
-                        console.log('ストアの全状態:', onlineGame);
+                        console.log(`${isMyMove ? '自分の' : '相手の'}回転アニメーション完了、盤面更新完了`);
                     });
                     return;
                 }
 
                 // 石を置いたイベントの処理
                 if (moveData && moveData.column !== undefined && moveData.row !== undefined && moveData.color) {
-                    console.log('相手が打った石の情報:', moveData);
+                    console.log(`${isMyMove ? '自分' : '相手'}が打った石の情報:`, moveData);
 
-                    // 相手が打った石の落下アニメーションを実行
-                    console.log(`列 ${moveData.column}, 行 ${moveData.row} でアニメーション開始: ${moveData.color}`);
-
-                    // アニメーション完了後に盤面更新を実行
+                    // 石の落下アニメーションを実行（自分と相手共通）
+                    console.log(`${isMyMove ? '自分の' : '相手の'}石 - 列 ${moveData.column}, 行 ${moveData.row} でアニメーション開始: ${moveData.color}`);
                     animateStoneDrop(moveData.column, moveData.row, moveData.color).then(() => {
-                        console.log('アニメーション完了、盤面更新を実行');
+                        console.log(`${isMyMove ? '自分の' : '相手の'}石のアニメーション完了、盤面更新を実行`);
                         dispatch(updateBoard({
                             board: data.game.board,
                             currentPlayer: data.game.current_player,
@@ -207,7 +185,7 @@ export const useOnlineGameLogic = () => {
                 }
             }
 
-            // アニメーションが実行されない場合（相手の手番の場合）は即座に盤面更新
+            // アニメーションが実行されない場合（その他の状態更新）は即座に盤面更新
             dispatch(updateBoard({
                 board: data.game.board,
                 currentPlayer: data.game.current_player,
@@ -274,7 +252,6 @@ export const useOnlineGameLogic = () => {
         clearError: clearErrorProcess,
         pusherRef,
         animateStoneDrop,
-        animateOnlineRotation,
-        animateMyOnlineRotation
+        animateOnlineRotation
     };
 };

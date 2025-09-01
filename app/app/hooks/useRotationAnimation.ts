@@ -91,7 +91,7 @@ export const useRotationAnimation = () => {
         animationRef.current = requestAnimationFrame(animate);
     }, [dispatch, board, rotateBoard, applyGravityToBoard, currentPlayer, checkWin, checkDraw, animateStoneDrop]);
 
-    // オンライン対戦用の回転アニメーション（相手の回転を表示）
+    // オンライン対戦用の回転アニメーション
     const animateOnlineRotation = useCallback((
         direction: 'left' | 'right',
         currentBoard: Cell[][],
@@ -160,62 +160,7 @@ export const useRotationAnimation = () => {
         animationRef.current = requestAnimationFrame(animate);
     }, [dispatch, rotateBoard, applyGravityToBoard, animateStoneDrop]);
 
-    // オンライン対戦用の自分の回転アニメーション
-    const animateMyOnlineRotation = useCallback((
-        direction: 'left' | 'right',
-        duration: number = 1000
-    ) => {
-        // 現在のボードのスナップショットを取得
-        const currentOnlineGame = store.getState().onlineGame;
-        const snapshot = currentOnlineGame.board as Cell[][];
-        console.log('snapshot', snapshot);
 
-        const startTime = Date.now();
-
-        // 回転アニメーション開始（回転前のボードを保持）
-        dispatch(startRotationAnimation({
-            direction,
-            rotatedBoard: snapshot
-        }));
-
-        // アニメーションループ
-        const animate = () => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-
-            // ease-out関数でアニメーション
-            const easeOut = 1 - Math.pow(1 - progress, 3);
-            const currentRotation = (direction === 'left' ? -90 : 90) * easeOut;
-
-            // アニメーション状態を更新（currentRotationのみ）
-            dispatch(updateRotationProgress({
-                currentRotation
-            }));
-
-            if (progress < 1) {
-                animationRef.current = requestAnimationFrame(animate);
-            } else {
-                // アニメーション完了後に実際の回転を実行
-                setTimeout(() => {
-                    // 1. ボードを回転（落下は考慮しない）
-                    const rotatedBoard = rotateBoard(snapshot, direction) as Cell[][];
-                    console.log('rotatedBoard', rotatedBoard);
-
-                    // 2. 回転後の盤面に落下を適用
-                    const settledBoard = applyGravityToBoard(rotatedBoard);
-                    console.log('settledBoard', settledBoard);
-
-                    // 回転アニメーション終了（落下アニメーション完了後）
-                    dispatch(endRotationAnimation());
-
-                    // 3. 落下アニメーションを実行（回転後の盤面と落下後の盤面の差分）
-                    animateStoneDrop(rotatedBoard, settledBoard);
-                }, 300); // 300msに延長（より自然なタイミング）
-            }
-        };
-
-        animationRef.current = requestAnimationFrame(animate);
-    }, [dispatch, board, rotateBoard, applyGravityToBoard, animateStoneDrop]);
 
     // クリーンアップ
     const cleanup = useCallback(() => {
@@ -228,7 +173,6 @@ export const useRotationAnimation = () => {
         animation,
         animateRotation,
         animateOnlineRotation,
-        animateMyOnlineRotation,
         cleanup
     };
 };

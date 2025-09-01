@@ -44,7 +44,6 @@ export default function GamePage() {
         clearError,
         pusherRef,
         animateOnlineRotation,
-        animateMyOnlineRotation
     } = useOnlineGameLogic();
 
     // ゲーム状態を設定する関数を取得
@@ -375,9 +374,8 @@ export default function GamePage() {
                             if (gameMode === 'online' && onlineGame.status === 'playing') {
                                 // オンライン対戦の回転処理
                                 if (isMyTurn()) {
-                                    // 自分の回転アニメーションを実行
-                                    animateMyOnlineRotation('left');
-                                    // 回転APIを呼び出し
+                                    // WebSocket受信後にアニメーションが実行されるため、API呼び出しのみ
+                                    console.log('回転API呼び出し: left');
                                     rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'left');
                                 }
                             } else {
@@ -396,9 +394,8 @@ export default function GamePage() {
                             if (gameMode === 'online' && onlineGame.status === 'playing') {
                                 // オンライン対戦の回転処理
                                 if (isMyTurn()) {
-                                    // 自分の回転アニメーションを実行
-                                    animateMyOnlineRotation('right');
-                                    // 回転APIを呼び出し
+                                    // WebSocket受信後にアニメーションが実行されるため、API呼び出しのみ
+                                    console.log('回転API呼び出し: right');
                                     rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'right');
                                 }
                             } else {
@@ -477,10 +474,10 @@ export default function GamePage() {
                                                 const emptyRow = getOnlineEmptyRow(colIndex);
                                                 if (emptyRow !== -1) {
                                                     // アニメーション完了後にmakeMoveを実行
-                                                    animateStoneDrop(colIndex, emptyRow, getPlayerColor()).then(() => {
+                                                    //animateStoneDrop(colIndex, emptyRow, getPlayerColor()).then(() => {
                                                         // オンラインの手を実行
                                                         makeMove(colIndex);
-                                                    });
+                                                    //});
                                                 }
                                             }
                                         } else if ((gameMode === 'pvp' || currentPlayer === 'red') && !animation.isAnimating && !animation.isRotating && !animation.isDroppingStones) {
