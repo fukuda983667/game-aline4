@@ -29,6 +29,10 @@ export default function GamePage() {
 
     const [hoveredColumn, setHoveredColumn] = React.useState<number | null>(null);
 
+    // タイマー関連の状態
+    const [timeLeft, setTimeLeft] = useState<number>(30);
+    const [timerActive, setTimerActive] = useState<boolean>(false);
+
     // オンライン対戦用のロジック
     const {
         onlineGame,
@@ -85,6 +89,53 @@ export default function GamePage() {
             setShowOnlineSetup(true);
         }
     }, [gameMode, onlineGame.myPlayerId, initializePlayer]);
+
+    // タイマーの管理
+    useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+
+        if (timerActive && timeLeft > 0) {
+            interval = setInterval(() => {
+                setTimeLeft((prevTime) => prevTime - 1);
+            }, 1000);
+        } else if (timeLeft === 0 && timerActive) {
+            // 時間切れ時の処理
+            if (gameMode === 'online' && onlineGame.status === 'playing' && isMyTurn()) {
+                // ランダムに空いている列を選択
+                const availableColumns = [];
+                for (let col = 0; col < 7; col++) {
+                    if (getOnlineEmptyRow(col) !== -1) {
+                        availableColumns.push(col);
+                    }
+                }
+
+                if (availableColumns.length > 0) {
+                    const randomColumn = availableColumns[Math.floor(Math.random() * availableColumns.length)];
+                    console.log('時間切れ: ランダムに列', randomColumn, 'に石を配置');
+                    makeMove(randomColumn);
+                }
+            }
+            setTimerActive(false);
+        }
+
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
+    }, [timerActive, timeLeft, gameMode, onlineGame.status, isMyTurn, getOnlineEmptyRow, makeMove]);
+
+    // 手番が変わった時のタイマーリセット
+    useEffect(() => {
+        if (gameMode === 'online' && onlineGame.status === 'playing') {
+            if (isMyTurn()) {
+                setTimeLeft(30);
+                setTimerActive(true);
+            } else {
+                setTimerActive(false);
+            }
+        }
+    }, [gameMode, onlineGame.status, onlineGame.currentPlayer, isMyTurn]);
 
     // 待機状態のWebSocket接続管理
     useEffect(() => {
@@ -541,13 +592,33 @@ export default function GamePage() {
                 </div>
 
                 {/* ゲームモードに応じたターン表示 */}
-                <div className="mt-4 text-xl font-bold">
-                    {gameMode === 'online' && onlineGame.status === 'playing' ? (
-                        isMyTurn() ? 'あなたのターン' : '相手のターン'
-                    ) : gameMode === 'cpu' ? (
-                        currentPlayer === 'red' ? 'あなたのターン' : 'CPUのターン'
-                    ) : (
-                        currentPlayer === 'red' ? 'プレイヤー1のターン' : 'プレイヤー2のターン'
+                <div className="mt-4 text-center">
+                    <div className="text-xl font-bold">
+                        {gameMode === 'online' && onlineGame.status === 'playing' ? (
+                            isMyTurn() ? 'あなたのターン' : '相手のターン'
+                        ) : gameMode === 'cpu' ? (
+                            currentPlayer === 'red' ? 'あなたのターン' : 'CPUのターン'
+                        ) : (
+                            currentPlayer === 'red' ? 'プレイヤー1のターン' : 'プレイヤー2のターン'
+                        )}
+                    </div>
+
+                    {/* オンライン対戦のタイマー表示 */}
+                    {gameMode === 'online' && onlineGame.status === 'playing' && isMyTurn() && (
+                        <div className="mt-2">
+                            <div className="text-lg font-semibold text-gray-700">
+                                残り時間: {timeLeft}秒
+                            </div>
+                            <div className="w-64 bg-gray-200 rounded-full h-2 mt-1 mx-auto">
+                                <div 
+                                    className={`h-2 rounded-full transition-all duration-1000 ${
+                                        timeLeft > 10 ? 'bg-green-500' : 
+                                        timeLeft > 5 ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${(timeLeft / 30) * 100}%` }}
+                                ></div>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
