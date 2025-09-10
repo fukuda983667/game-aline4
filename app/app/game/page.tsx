@@ -32,6 +32,11 @@ export default function GamePage() {
     // タイマー関連の状態
     const [timeLeft, setTimeLeft] = useState<number>(30);
     const [timerActive, setTimerActive] = useState<boolean>(false);
+    
+    // マッチング用のタイマー状態
+    const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(30);
+    const [matchingTimerActive, setMatchingTimerActive] = useState<boolean>(false);
+    const [matchingFailed, setMatchingFailed] = useState<boolean>(false);
 
     // オンライン対戦用のロジック
     const {
@@ -136,6 +141,36 @@ export default function GamePage() {
             }
         }
     }, [gameMode, onlineGame.status, onlineGame.currentPlayer, isMyTurn]);
+
+    // マッチングタイマーの管理
+    useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+
+        if (matchingTimerActive && matchingTimeLeft > 0) {
+            interval = setInterval(() => {
+                setMatchingTimeLeft((prevTime) => prevTime - 1);
+            }, 1000);
+        } else if (matchingTimeLeft === 0 && matchingTimerActive) {
+            // マッチング時間切れ
+            setMatchingFailed(true);
+            setMatchingTimerActive(false);
+        }
+
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
+    }, [matchingTimerActive, matchingTimeLeft]);
+
+    // マッチング成功時のタイマーリセット
+    useEffect(() => {
+        if (onlineGame.status === 'playing' && matchingTimerActive) {
+            setMatchingTimerActive(false);
+            setMatchingFailed(false);
+            setMatchingTimeLeft(30);
+        }
+    }, [onlineGame.status, matchingTimerActive]);
 
     // 待機状態のWebSocket接続管理
     useEffect(() => {
@@ -324,19 +359,6 @@ export default function GamePage() {
             <div className="container mx-auto py-8">
                 <div className="flex flex-col items-center justify-center p-8">
                     <h1 className="text-4xl font-bold mb-8 text-gray-800">オンライン対戦</h1>
-
-                    {onlineGame.error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                            {onlineGame.error}
-                            <button
-                                onClick={clearError}
-                                className="ml-2 text-red-700 hover:text-red-900"
-                            >
-                                ×
-                            </button>
-                        </div>
-                    )}
-
                     <div className="bg-white p-8 rounded-lg shadow-lg w-96">
                         <div className="mb-4">
                             <label htmlFor="playerName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -353,25 +375,79 @@ export default function GamePage() {
                             />
                         </div>
 
+                        {/* マッチングタイマー表示 */}
+                        {matchingTimerActive && (
+                            <div className="mb-4 text-center">
+                                <div className="text-lg font-semibold text-gray-700 mb-3">
+                                    マッチング中... 残り時間: {matchingTimeLeft}秒
+                                </div>
+                                <div className="flex justify-center">
+                                    <div className="relative">
+                                        {/* 外側の円 */}
+                                        <div className="w-12 h-12 border-4 border-gray-200 rounded-full"></div>
+                                        {/* 回転する円 */}
+                                        <div
+                                            className="absolute top-0 left-0 w-12 h-12 border-4 border-transparent rounded-full animate-spin border-t-blue-500"
+                                        style={{ animationDuration: '1s' }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* マッチング失敗時の表示 */}
+                        {matchingFailed && (
+                            <div className="mb-4 text-center">
+                                <div className="text-lg font-semibold text-red-600 mb-2">
+                                    対戦相手が見つかりませんでした。
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex space-x-4">
-                            <button
-                                onClick={async () => {
-                                    const gameId = await startMatchmaking();
-                                    if (gameId) {
-                                        pusherRef.current = initializePusher(gameId);
-                                        setShowOnlineSetup(false);
-                                    }
-                                }}
-                                disabled={onlineGame.isSearching || !onlineGame.myPlayerName.trim()}
-                                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded transition-colors"
-                            >
-                                {onlineGame.isSearching ? '検索中...' : '対戦相手を探す'}
-                            </button>
+                            {!matchingFailed ? (
+                                <button
+                                    onClick={async () => {
+                                        const gameId = await startMatchmaking();
+                                        if (gameId) {
+                                            pusherRef.current = initializePusher(gameId);
+                                            setShowOnlineSetup(false);
+                                            // マッチングタイマーを開始
+                                            setMatchingTimerActive(true);
+                                            setMatchingTimeLeft(30);
+                                        }
+                                    }}
+                                    disabled={onlineGame.isSearching || !onlineGame.myPlayerName.trim() || matchingTimerActive}
+                                    className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded transition-colors"
+                                >
+                                    {onlineGame.isSearching ? '検索中...' : '対戦相手を探す'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={async () => {
+                                        setMatchingFailed(false);
+                                        const gameId = await startMatchmaking();
+                                        if (gameId) {
+                                            pusherRef.current = initializePusher(gameId);
+                                            setShowOnlineSetup(false);
+                                            // マッチングタイマーを開始
+                                            setMatchingTimerActive(true);
+                                            setMatchingTimeLeft(30);
+                                        }
+                                    }}
+                                    disabled={onlineGame.isSearching || !onlineGame.myPlayerName.trim()}
+                                    className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded transition-colors"
+                                >
+                                    リトライ
+                                </button>
+                            )}
 
                             <button
                                 onClick={() => {
                                     dispatch(setGameMode('pvp'));
                                     setShowOnlineSetup(false);
+                                    setMatchingFailed(false);
+                                    setMatchingTimerActive(false);
                                 }}
                                 className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded transition-colors"
                             >
@@ -610,9 +686,9 @@ export default function GamePage() {
                                 残り時間: {timeLeft}秒
                             </div>
                             <div className="w-64 bg-gray-200 rounded-full h-2 mt-1 mx-auto">
-                                <div 
+                                <div
                                     className={`h-2 rounded-full transition-all duration-1000 ${
-                                        timeLeft > 10 ? 'bg-green-500' : 
+                                        timeLeft > 10 ? 'bg-green-500' :
                                         timeLeft > 5 ? 'bg-yellow-500' : 'bg-red-500'
                                     }`}
                                     style={{ width: `${(timeLeft / 30) * 100}%` }}
