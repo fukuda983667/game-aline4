@@ -27,3 +27,9 @@ Route::prefix('game')->group(function () {
     Route::get('/state', [GameController::class, 'getGameState']);
     Route::post('/leave', [GameController::class, 'leaveGame']);
 });
+
+// ランキング用のルート
+Route::prefix('ranking')->group(function () {
+    Route::get('/monthly', [GameController::class, 'getMonthlyRanking']);
+    Route::get('/available-months', [GameController::class, 'getAvailableMonths']);
+});

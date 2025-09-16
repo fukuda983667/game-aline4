@@ -8,6 +8,7 @@ use App\Events\GameMove;
 use App\Events\GameStart;
 use App\Events\PlayerJoined;
 use App\Events\PlayerLeft;
+use App\Models\Ranking;
 use Illuminate\Support\Str;
 
 class GameController extends Controller
@@ -168,6 +169,12 @@ class GameController extends Controller
         if ($this->checkWin($game['board'], $row, $column, $playerColor)) {
             $game['status'] = 'won';
             $game['winner'] = $playerColor;
+
+            // 勝利したプレイヤーのランキングを更新
+            $winnerPlayer = $this->getPlayerByColor($game, $playerColor);
+            if ($winnerPlayer) {
+                $this->updatePlayerRanking($winnerPlayer['name']);
+            }
         } elseif ($this->checkDraw($game['board'])) {
             $game['status'] = 'draw';
         }
@@ -282,6 +289,12 @@ class GameController extends Controller
         $game['status'] = $gameStatus;
         if ($winner) {
             $game['winner'] = $winner;
+
+            // 勝利したプレイヤーのランキングを更新
+            $winnerPlayer = $this->getPlayerByColor($game, $winner);
+            if ($winnerPlayer) {
+                $this->updatePlayerRanking($winnerPlayer['name']);
+            }
         }
 
         // 手番を交代（ゲームが終了していない場合のみ）
@@ -354,6 +367,16 @@ class GameController extends Controller
         foreach ($game['players'] as $player) {
             if ($player['id'] === $playerId) {
                 return $player['color'];
+            }
+        }
+        return null;
+    }
+
+    private function getPlayerByColor(array $game, string $color): ?array
+    {
+        foreach ($game['players'] as $player) {
+            if ($player['color'] === $color) {
+                return $player;
             }
         }
         return null;
@@ -523,5 +546,101 @@ class GameController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * 勝利したプレイヤーのランキングを更新
+     */
+    private function updatePlayerRanking(string $playerName): void
+    {
+        try {
+            $currentYearMonth = now()->format('Y-m');
+
+            // 既存のレコードを検索または新規作成
+            $ranking = Ranking::firstOrNew([
+                'year_month' => $currentYearMonth,
+                'player_name' => $playerName
+            ]);
+
+            // winsを1増加
+            $ranking->wins = ($ranking->wins ?? 0) + 1;
+            $ranking->save();
+
+            \Log::info('ランキングを更新しました', [
+                'player_name' => $playerName,
+                'year_month' => $currentYearMonth,
+                'wins' => $ranking->wins
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('ランキング更新でエラーが発生しました', [
+                'error' => $e->getMessage(),
+                'player_name' => $playerName
+            ]);
+        }
+    }
+
+    /**
+     * 月間ランキングを取得
+     */
+    public function getMonthlyRanking(Request $request): JsonResponse
+    {
+        try {
+            $yearMonth = $request->input('year_month', now()->format('Y-m'));
+
+            $rankings = Ranking::where('year_month', $yearMonth)
+                ->orderBy('wins', 'desc')
+                ->orderBy('player_name', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'rankings' => $rankings,
+                'year_month' => $yearMonth
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('ランキング取得でエラーが発生しました', [
+                'error' => $e->getMessage(),
+                'year_month' => $request->input('year_month')
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'ランキングの取得に失敗しました'
+            ], 500);
+        }
+    }
+
+    /**
+     * 利用可能な月を取得
+     */
+    public function getAvailableMonths(Request $request): JsonResponse
+    {
+        try {
+            $availableMonths = Ranking::select('year_month')
+                ->distinct()
+                ->orderBy('year_month', 'desc')
+                ->pluck('year_month')
+                ->toArray();
+
+            // 現在の月も含める（データがない場合でも）
+            $currentMonth = now()->format('Y-m');
+            if (!in_array($currentMonth, $availableMonths)) {
+                array_unshift($availableMonths, $currentMonth);
+            }
+
+            return response()->json([
+                'success' => true,
+                'available_months' => $availableMonths
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('利用可能な月の取得でエラーが発生しました', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => '利用可能な月の取得に失敗しました'
+            ], 500);
+        }
     }
 }
