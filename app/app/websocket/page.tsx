@@ -1,35 +1,31 @@
-"use client";
+'use client'
 
 import { useEffect, useState } from 'react';
 import Pusher from 'pusher-js';
+import React from 'react';
 
-export default function Home() {
-    const [message, setMessage] = useState('');
+const PUSHER_KEY = '49d48050fbe3aad25b13';
+
+export default function Test() {
+    const [data, setData] = useState('');
 
     useEffect(() => {
-        // Laravel WebSocket サーバーへ接続
-        const pusher = new Pusher('pusher-app-key', {
-        cluster: 'mt1', // ダミー（Laravel WebSocketでは未使用だが必須）
-        wsHost: 'localhost',
-        wsPort: 6001,
-        forceTLS: false,
-        enabledTransports: ['ws'],
+        Pusher.logToConsole = true;
+        const pusher = new Pusher(PUSHER_KEY, {
+            cluster: 'ap3',
         });
 
-        const channel = pusher.subscribe('public.hello');
-        channel.bind('HelloWorld', function (data: any) {
-        setMessage(data.message);
+        const channel = pusher.subscribe('hello');
+        channel.bind('HelloWorld', (data: any) => {
+            console.log('Received:', data);
+            setData(data.message); // ← 修正
         });
 
         return () => {
-        pusher.unsubscribe('public.hello');
+            channel.unbind('HelloWorld');
+            pusher.unsubscribe('hello');
         };
     }, []);
 
-    return (
-        <div>
-        <h1>WebSocket Test</h1>
-        <p>{message || '待機中...'}</p>
-        </div>
-    );
+    return <h1>{data || 'No data'}</h1>;
 }

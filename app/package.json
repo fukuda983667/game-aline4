@@ -12,7 +12,7 @@
     "@react-three/drei": "^10.0.7",
     "@react-three/fiber": "^9.1.2",
     "@reduxjs/toolkit": "^2.6.1",
-    "laravel-echo": "^2.1.0",
+    "laravel-echo": "^2.2.4",
     "next": "15.1.7",
     "pusher-js": "^8.4.0",
     "react": "^19.0.0",

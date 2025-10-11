@@ -16,7 +16,7 @@ class HelloWorldEvent implements ShouldBroadcast
 
     public $message;
 
-    public function __construct($message = 'Hello World')
+    public function __construct($message)
     {
         $this->message = $message;
     }
@@ -28,7 +28,7 @@ class HelloWorldEvent implements ShouldBroadcast
      */
     public function broadcastOn(): Channel
     {
-        return new Channel('public.hello');
+        return new Channel('hello');
     }
 
     public function broadcastAs(): string

@@ -19,6 +19,6 @@ Route::get('/', function () {
 });
 
 Route::get('/broadcast', function () {
-    broadcast(new HelloWorldEvent());
+    event(new HelloWorldEvent('Hello World!'));
     return 'Event broadcasted!';
 });
