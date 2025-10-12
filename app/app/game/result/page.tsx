@@ -5,7 +5,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@/app/store/gameStore';
 import { resetGame } from '@/app/store/gameStore';
 import { useRouter } from 'next/navigation';
-import { useOnlineGameLogic } from '@/app/hooks/useOnlineGameLogic';
+import { useOnlineGame } from '@/app/hooks/useOnlineGame';
 
 export default function Result() {
     const router = useRouter();
@@ -15,7 +15,7 @@ export default function Result() {
     const gameMode = useSelector((state: RootState) => state.game.gameMode);
 
     // オンライン対戦用のロジック
-    const { onlineGame, leaveGame } = useOnlineGameLogic();
+    const { onlineGame, leaveGame } = useOnlineGame();
 
     // デバッグ用：オンライン対戦の状態を確認
     console.log('Result画面 - onlineGame状態:', onlineGame);

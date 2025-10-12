@@ -8,9 +8,9 @@ import { useGameActions } from '../hooks/useGameActions';
 import { useCpuLogic } from '../hooks/useCpuLogic';
 import { useStoneAnimation } from '../hooks/useStoneAnimation';
 import { useRotationAnimation } from '../hooks/useRotationAnimation';
-import { useOnlineGameLogic } from '../hooks/useOnlineGameLogic';
+import { useOnlineMatching } from '../hooks/useOnlineMatching';
+import { useOnlineGame } from '../hooks/useOnlineGame';
 import { createPusherInstance } from '../lib/pusher';
-import { rotateBoard } from '../lib/onlineGameFunctions';
 import { useRouter } from 'next/navigation';
 
 export default function GamePage() {
@@ -38,22 +38,28 @@ export default function GamePage() {
     const [matchingTimerActive, setMatchingTimerActive] = useState<boolean>(false);
     const [matchingFailed, setMatchingFailed] = useState<boolean>(false);
 
-    // オンライン対戦用のロジック
+    // オンライン対戦用のマッチング機能
     const {
         onlineGame,
         initializePlayer,
         updatePlayerName,
         startMatchmaking,
+        clearError,
+        pusherRef: matchingPusherRef,
+    } = useOnlineMatching();
+
+    // オンライン対戦用のゲーム機能
+    const {
         makeMove,
+        rotateBoard: rotateBoardOnline,
         leaveGame,
         initializePusher,
         getPlayerColor,
         isMyTurn,
         getEmptyRow: getOnlineEmptyRow,
-        clearError,
         pusherRef,
         animateOnlineRotation,
-    } = useOnlineGameLogic();
+    } = useOnlineGame();
 
     // ゲーム状態を設定する関数を取得
     const setGameState = useCallback((gameData: any) => {
@@ -503,7 +509,7 @@ export default function GamePage() {
                                 if (isMyTurn()) {
                                     // WebSocket受信後にアニメーションが実行されるため、API呼び出しのみ
                                     console.log('回転API呼び出し: left');
-                                    rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'left');
+                                    rotateBoardOnline('left');
                                 }
                             } else {
                                 // ローカル対戦の回転処理
@@ -523,7 +529,7 @@ export default function GamePage() {
                                 if (isMyTurn()) {
                                     // WebSocket受信後にアニメーションが実行されるため、API呼び出しのみ
                                     console.log('回転API呼び出し: right');
-                                    rotateBoard(onlineGame.id!, onlineGame.myPlayerId!, 'right');
+                                    rotateBoardOnline('right');
                                 }
                             } else {
                                 // ローカル対戦の回転処理
