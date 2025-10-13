@@ -11,7 +11,7 @@ export interface OnlineGameState {
     players: Record<string, OnlinePlayer>;
     board: (string | null)[][];
     currentPlayer: 'red' | 'yellow';
-    status: 'waiting' | 'playing' | 'won' | 'draw';
+    status: 'waiting' | 'tentative' | 'playing' | 'won' | 'draw';
     winner?: 'red' | 'yellow';
     myPlayerId: string | null;
     myPlayerName: string;
@@ -53,12 +53,18 @@ const onlineGameSlice = createSlice({
         stopSearching: (state) => {
             state.isSearching = false;
         },
+        setWaitingState: (state, action: PayloadAction<{ id: string }>) => {
+            state.id = action.payload.id;
+            state.status = 'waiting';
+            state.isSearching = false;
+            state.isConnected = false; // Pusher接続をリセット
+        },
         setGameState: (state, action: PayloadAction<{
             id: string;
             players: Record<string, OnlinePlayer>;
             board: (string | null)[][];
             currentPlayer: 'red' | 'yellow';
-            status: 'playing' | 'won' | 'draw';
+            status: 'tentative' | 'playing' | 'won' | 'draw';
             winner?: 'red' | 'yellow';
         }>) => {
             state.id = action.payload.id;
@@ -134,6 +140,7 @@ export const {
     updatePlayerName,
     startSearching,
     stopSearching,
+    setWaitingState,
     setGameState,
     updateBoard,
     setConnected,

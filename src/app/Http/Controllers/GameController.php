@@ -8,6 +8,7 @@ use App\Events\GameMove;
 use App\Events\GameStart;
 use App\Events\PlayerJoined;
 use App\Events\PlayerLeft;
+use App\Events\TentativeMatch;
 use App\Models\Ranking;
 use Illuminate\Support\Str;
 
@@ -55,61 +56,35 @@ class GameController extends Controller
         // 既に待機中のプレイヤーがいるかチェック
         if (!empty($waitingPlayers)) {
             $opponent = array_shift($waitingPlayers);
+            $this->setWaitingPlayers($waitingPlayers);
 
-            // ゲームIDを生成
-            $gameId = Str::uuid()->toString();
+            // 相手のゲームIDを使用
+            $gameId = $opponent['game_id'];
 
-            // 先攻後攻をランダムに決定
-            $firstPlayer = rand(0, 1) === 0 ? $opponent : ['player_id' => $playerId, 'player_name' => $playerName];
-            $secondPlayer = $firstPlayer['player_id'] === $opponent['player_id'] ? 
-                ['player_id' => $playerId, 'player_name' => $playerName] : $opponent;
-
-            // ゲームを開始
-            $game = [
-                'id' => $gameId,
-                'players' => [
-                    $firstPlayer['player_id'] => [
-                        'id' => $firstPlayer['player_id'],
-                        'name' => $firstPlayer['player_name'],
-                        'color' => 'red'
-                    ],
-                    $secondPlayer['player_id'] => [
-                        'id' => $secondPlayer['player_id'],
-                        'name' => $secondPlayer['player_name'],
-                        'color' => 'yellow'
-                    ]
-                ],
-                'board' => $this->createEmptyBoard(),
-                'current_player' => 'red',
-                'status' => 'playing',
-                'created_at' => now()
-            ];
-
-            $activeGames = $this->getActiveGames();
-            $activeGames[$gameId] = $game;
-            $this->setActiveGames($activeGames);
-
-            \Log::info('マッチング成功', [
+            \Log::info('仮マッチング成功', [
                 'game_id' => $gameId,
                 'player1' => $opponent,
                 'player2' => ['player_id' => $playerId, 'player_name' => $playerName]
             ]);
 
-            // 両プレイヤーにゲーム開始を通知
-            broadcast(new GameStart($gameId, $game))->toOthers();
-
             return response()->json([
                 'success' => true,
                 'game_id' => $gameId,
-                'status' => 'matched',
-                'game' => $game
+                'status' => 'tentative',
+                'player_id' => $playerId,
+                'opponent_id' => $opponent['player_id'],
+                'opponent_name' => $opponent['player_name']
             ]);
         }
 
-        // 待機リストに追加
+        // ゲームIDを生成（待機用）
+        $gameId = Str::uuid()->toString();
+
+        // 待機リストに追加（game_idも含める）
         $waitingPlayers[] = [
             'player_id' => $playerId,
             'player_name' => $playerName,
+            'game_id' => $gameId,
             'joined_at' => now()
         ];
         $this->setWaitingPlayers($waitingPlayers);
@@ -117,13 +92,162 @@ class GameController extends Controller
         \Log::info('プレイヤーを待機リストに追加', [
             'player_id' => $playerId,
             'player_name' => $playerName,
+            'game_id' => $gameId,
             'total_waiting' => count($waitingPlayers)
         ]);
 
         return response()->json([
             'success' => true,
+            'game_id' => $gameId,
+            'player_id' => $playerId,
             'status' => 'waiting',
             'message' => 'マッチング中です...'
+        ]);
+    }
+
+    public function readyMatch(Request $request): JsonResponse
+    {
+        $gameId = $request->input('game_id');
+        $playerId = $request->input('player_id');
+        $playerName = $request->input('player_name');
+        $opponentId = $request->input('opponent_id');
+        $opponentName = $request->input('opponent_name');
+
+        \Log::info('ready-match開始', [
+            'game_id' => $gameId,
+            'player_id' => $playerId,
+            'opponent_id' => $opponentId
+        ]);
+
+        // 先攻後攻をランダムに決定
+        $firstPlayer = rand(0, 1) === 0 
+            ? ['player_id' => $opponentId, 'player_name' => $opponentName]
+            : ['player_id' => $playerId, 'player_name' => $playerName];
+        $secondPlayer = $firstPlayer['player_id'] === $opponentId
+            ? ['player_id' => $playerId, 'player_name' => $playerName]
+            : ['player_id' => $opponentId, 'player_name' => $opponentName];
+
+        // ゲーム状態を作成
+        $game = [
+            'id' => $gameId,
+            'players' => [
+                $firstPlayer['player_id'] => [
+                    'id' => $firstPlayer['player_id'],
+                    'name' => $firstPlayer['player_name'],
+                    'color' => 'red'
+                ],
+                $secondPlayer['player_id'] => [
+                    'id' => $secondPlayer['player_id'],
+                    'name' => $secondPlayer['player_name'],
+                    'color' => 'yellow'
+                ]
+            ],
+            'board' => $this->createEmptyBoard(),
+            'current_player' => 'red',
+            'status' => 'tentative',
+            'created_at' => now()
+        ];
+
+        // 仮マッチング状態のゲームを保存
+        $activeGames = $this->getActiveGames();
+        $activeGames[$gameId] = $game;
+        $this->setActiveGames($activeGames);
+
+        // 相手（waitingプレイヤー）に仮マッチング通知を送信
+        broadcast(new TentativeMatch($gameId, $playerId, $playerName));
+
+        // 相手の応答を確認（5秒間、0.5秒ごとにチェック）
+        $confirmKey = "match_confirm_{$gameId}_{$opponentId}";
+        $confirmed = false;
+        $maxAttempts = 10; // 5秒間を0.5秒ごとにチェック
+        
+        \Log::info('相手の応答を待機開始', [
+            'game_id' => $gameId,
+            'opponent_id' => $opponentId,
+            'cache_key' => $confirmKey
+        ]);
+
+        for ($i = 0; $i < $maxAttempts; $i++) {
+            usleep(500000); // 0.5秒待機
+            $confirmed = cache()->get($confirmKey, false);
+            
+            if ($confirmed) {
+                \Log::info('相手の応答確認成功', [
+                    'game_id' => $gameId,
+                    'opponent_id' => $opponentId,
+                    'attempt' => $i + 1,
+                    'cache_key' => $confirmKey
+                ]);
+                break;
+            }
+        }
+
+        if (!$confirmed) {
+            \Log::info('相手の応答確認失敗（タイムアウト）', [
+                'game_id' => $gameId,
+                'opponent_id' => $opponentId,
+                'cache_key' => $confirmKey
+            ]);
+        }
+
+        if ($confirmed) {
+            // 確認が取れたらゲーム開始
+            $game['status'] = 'playing';
+            $activeGames[$gameId] = $game;
+            $this->setActiveGames($activeGames);
+
+            // ゲーム開始イベントを発行
+            broadcast(new GameStart($gameId, $game));
+
+            // 確認キャッシュを削除
+            cache()->forget($confirmKey);
+
+            \Log::info('マッチング確定、ゲーム開始', [
+                'game_id' => $gameId
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'playing',
+                'game' => $game
+            ]);
+        } else {
+            // 確認が取れなかった場合
+            \Log::info('マッチング確認失敗', [
+                'game_id' => $gameId
+            ]);
+
+            // ゲームを削除
+            unset($activeGames[$gameId]);
+            $this->setActiveGames($activeGames);
+
+            return response()->json([
+                'success' => false,
+                'status' => 'timeout',
+                'message' => '相手の応答がありませんでした'
+            ]);
+        }
+    }
+
+    public function confirmMatch(Request $request): JsonResponse
+    {
+        $gameId = $request->input('game_id');
+        $playerId = $request->input('player_id');
+
+        // キャッシュに確認を保存（10秒間に延長）
+        $confirmKey = "match_confirm_{$gameId}_{$playerId}";
+        cache()->put($confirmKey, true, 10);
+
+        \Log::info('confirm-match受信', [
+            'game_id' => $gameId,
+            'player_id' => $playerId,
+            'cache_key' => $confirmKey,
+            'cache_saved' => cache()->get($confirmKey)
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'マッチングを確認しました'
         ]);
     }
 

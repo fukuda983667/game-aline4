@@ -29,7 +29,7 @@ export const generatePlayerId = (): string => {
 export const startMatchmaking = async (
     playerId: string,
     playerName: string
-): Promise<{ success: boolean; gameId?: string; status?: string; message?: string; game?: any }> => {
+): Promise<{ success: boolean; gameId?: string; status?: string; message?: string; game?: any; opponentId?: string; opponentName?: string }> => {
     try {
         const response = await fetch('http://localhost:8080/api/game/find-match', {
             method: 'POST',
@@ -46,17 +46,103 @@ export const startMatchmaking = async (
         console.log('マッチング結果:', data); // デバッグ用
 
         if (data.success) {
-            if (data.status === 'matched') {
-                console.log('マッチング成功:', data.game_id); // デバッグ用
-                return { success: true, gameId: data.game_id, status: 'matched', game: data.game };
-            } else {
-                console.log('マッチング待機中:', data.status); // デバッグ用
-                return { success: true, status: 'waiting', message: 'マッチング中です...' };
+            if (data.status === 'tentative') {
+                console.log('仮マッチング成功:', data.game_id); // デバッグ用
+                return {
+                    success: true,
+                    gameId: data.game_id,
+                    status: 'tentative',
+                    game: data.game,
+                    opponentId: data.opponent_id,
+                    opponentName: data.opponent_name
+                };
+            } else if (data.status === 'waiting') {
+                console.log('マッチング待機中:', data.game_id); // デバッグ用
+                return {
+                    success: true,
+                    gameId: data.game_id,
+                    status: 'waiting',
+                    message: 'マッチング中です...'
+                };
             }
         } else {
             console.log('マッチングエラー:', data.message); // デバッグ用
             return { success: false, message: data.message || 'エラーが発生しました' };
         }
+    } catch (err) {
+        return { success: false, message: 'サーバーとの接続に失敗しました' };
+    }
+    return { success: false, message: '不明なエラーが発生しました' };
+};
+
+// マッチング準備完了
+export const readyMatch = async (
+    gameId: string,
+    playerId: string,
+    playerName: string,
+    opponentId: string,
+    opponentName: string
+): Promise<{ success: boolean; status?: string; game?: any; message?: string }> => {
+    try {
+        const response = await fetch('http://localhost:8080/api/game/ready-match', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                game_id: gameId,
+                player_id: playerId,
+                player_name: playerName,
+                opponent_id: opponentId,
+                opponent_name: opponentName
+            })
+        });
+
+        const data = await response.json();
+        console.log('ready-match結果:', data); // デバッグ用
+
+        if (data.success) {
+            return {
+                success: true,
+                status: data.status,
+                game: data.game
+            };
+        } else {
+            return {
+                success: false,
+                status: data.status,
+                message: data.message || 'エラーが発生しました' 
+            };
+        }
+    } catch (err) {
+        return { success: false, message: 'サーバーとの接続に失敗しました' };
+    }
+};
+
+// マッチング確認
+export const confirmMatch = async (
+    gameId: string,
+    playerId: string
+): Promise<{ success: boolean; message?: string }> => {
+    try {
+        const response = await fetch('http://localhost:8080/api/game/confirm-match', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                game_id: gameId,
+                player_id: playerId
+            })
+        });
+
+        const data = await response.json();
+        console.log('confirm-match結果:', data); // デバッグ用
+
+        return {
+            success: data.success,
+            message: data.message
+        };
     } catch (err) {
         return { success: false, message: 'サーバーとの接続に失敗しました' };
     }

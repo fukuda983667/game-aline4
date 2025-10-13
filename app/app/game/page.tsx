@@ -44,6 +44,8 @@ export default function GamePage() {
         initializePlayer,
         updatePlayerName,
         startMatchmaking,
+        readyMatch,
+        confirmMatch,
         clearError,
         pusherRef: matchingPusherRef,
     } = useOnlineMatching();
@@ -178,40 +180,60 @@ export default function GamePage() {
         }
     }, [onlineGame.status, matchingTimerActive]);
 
-    // 待機状態のWebSocket接続管理
+    // ゲームチャンネルのPusher接続管理（tentative/waitingどちらも）
     useEffect(() => {
-        if (gameMode === 'online' && onlineGame.status === 'waiting' && !onlineGame.isConnected) {
-            // 待機状態になった時にwaiting-playersチャンネルに接続
+        if (gameMode === 'online' && onlineGame.id && !onlineGame.isConnected &&
+            (onlineGame.status === 'tentative' || onlineGame.status === 'waiting')) {
+            console.log('Pusher接続開始 - game_id:', onlineGame.id, 'status:', onlineGame.status);
+
+            // ゲームチャンネルに接続
             const pusherInstance = createPusherInstance();
-            const waitingChannel = pusherInstance.subscribe('waiting-players');
+            const gameChannel = pusherInstance.subscribe(`game.${onlineGame.id}`);
 
-            waitingChannel.bind('game.start', (data: any) => {
-                // マッチング完了時の処理
+            // 接続完了を記録
+            gameChannel.bind('pusher:subscription_succeeded', () => {
+                console.log('Pusherチャンネル購読成功:', `game.${onlineGame.id}`);
+            });
+
+            // 仮マッチング通知を受信（待機中のプレイヤー用）
+            gameChannel.bind('tentative.match', (data: any) => {
+                console.log('仮マッチング通知受信:', data);
+                // 即座にconfirm-matchを送信
+                confirmMatch(data.game_id);
+            });
+
+            // ゲーム開始通知を受信
+            gameChannel.bind('game.start', (data: any) => {
+                console.log('ゲーム開始通知受信:', data);
                 if (data.game && onlineGame.myPlayerId && data.game.players[onlineGame.myPlayerId]) {
-
                     // ゲームの状態を完全に更新
                     setGameState(data.game);
 
-                    // ゲームチャンネルに接続
+                    // ゲームチャンネルに再接続（ゲーム中のイベントを受信するため）
+                    gameChannel.unbind('tentative.match');
+                    gameChannel.unbind('game.start');
                     pusherRef.current = initializePusher(data.game.id);
-                    waitingChannel.unsubscribe();
-                    pusherInstance.disconnect();
 
                     // セットアップ画面を非表示
                     setShowOnlineSetup(false);
                 }
             });
 
-            // クリーンアップ関数を修正 - 接続を維持
+            // クリーンアップ関数
             return () => {
-                // 待機状態の間は接続を維持
-                if (onlineGame.status !== 'waiting') {
-                    waitingChannel.unsubscribe();
-                    pusherInstance.disconnect();
+                console.log('Pusher接続クリーンアップ - status:', onlineGame.status);
+                if (onlineGame.status === 'playing') {
+                    // ゲーム中は接続を維持
+                    return;
                 }
+                gameChannel.unbind('pusher:subscription_succeeded');
+                gameChannel.unbind('tentative.match');
+                gameChannel.unbind('game.start');
+                gameChannel.unsubscribe();
+                pusherInstance.disconnect();
             };
         }
-    }, [gameMode, onlineGame.status, onlineGame.isConnected, onlineGame.myPlayerId, initializePusher, setGameState]);
+    }, [gameMode, onlineGame.id, onlineGame.status, onlineGame.isConnected, onlineGame.myPlayerId]);
 
 
 
@@ -414,13 +436,37 @@ export default function GamePage() {
                             {!matchingFailed ? (
                                 <button
                                     onClick={async () => {
-                                        const gameId = await startMatchmaking();
-                                        if (gameId) {
-                                            pusherRef.current = initializePusher(gameId);
-                                            setShowOnlineSetup(false);
+                                        const result = await startMatchmaking();
+                                        if (result) {
                                             // マッチングタイマーを開始
                                             setMatchingTimerActive(true);
                                             setMatchingTimeLeft(30);
+                                            
+                                            if (result.type === 'tentative') {
+                                                // 仮マッチング成功 - ready-matchを送信
+                                                console.log('仮マッチング成功、ready-matchを送信');
+                                                const readyResult = await readyMatch(
+                                                    result.gameId, 
+                                                    result.opponentId!, 
+                                                    result.opponentName!
+                                                );
+                                                
+                                                if (readyResult && readyResult.success) {
+                                                    // ゲーム開始成功
+                                                    console.log('ゲーム開始成功');
+                                                    pusherRef.current = initializePusher(result.gameId);
+                                                    setShowOnlineSetup(false);
+                                                    setMatchingTimerActive(false);
+                                                } else if (readyResult && readyResult.status === 'timeout') {
+                                                    // タイムアウト
+                                                    console.log('マッチングタイムアウト');
+                                                    setMatchingFailed(true);
+                                                    setMatchingTimerActive(false);
+                                                }
+                                            } else if (result.type === 'waiting') {
+                                                // 待機中 - Pusherイベントを待つ
+                                                console.log('待機中、Pusherイベントを待機');
+                                            }
                                         }
                                     }}
                                     disabled={onlineGame.isSearching || !onlineGame.myPlayerName.trim() || matchingTimerActive}
@@ -432,13 +478,37 @@ export default function GamePage() {
                                 <button
                                     onClick={async () => {
                                         setMatchingFailed(false);
-                                        const gameId = await startMatchmaking();
-                                        if (gameId) {
-                                            pusherRef.current = initializePusher(gameId);
-                                            setShowOnlineSetup(false);
+                                        const result = await startMatchmaking();
+                                        if (result) {
                                             // マッチングタイマーを開始
                                             setMatchingTimerActive(true);
                                             setMatchingTimeLeft(30);
+                                            
+                                            if (result.type === 'tentative') {
+                                                // 仮マッチング成功 - ready-matchを送信
+                                                console.log('仮マッチング成功、ready-matchを送信');
+                                                const readyResult = await readyMatch(
+                                                    result.gameId, 
+                                                    result.opponentId!, 
+                                                    result.opponentName!
+                                                );
+                                                
+                                                if (readyResult && readyResult.success) {
+                                                    // ゲーム開始成功
+                                                    console.log('ゲーム開始成功');
+                                                    pusherRef.current = initializePusher(result.gameId);
+                                                    setShowOnlineSetup(false);
+                                                    setMatchingTimerActive(false);
+                                                } else if (readyResult && readyResult.status === 'timeout') {
+                                                    // タイムアウト
+                                                    console.log('マッチングタイムアウト');
+                                                    setMatchingFailed(true);
+                                                    setMatchingTimerActive(false);
+                                                }
+                                            } else if (result.type === 'waiting') {
+                                                // 待機中 - Pusherイベントを待つ
+                                                console.log('待機中、Pusherイベントを待機');
+                                            }
                                         }
                                     }}
                                     disabled={onlineGame.isSearching || !onlineGame.myPlayerName.trim()}

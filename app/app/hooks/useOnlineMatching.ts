@@ -5,6 +5,7 @@ import {
     setMyPlayerInfo,
     updatePlayerName as updatePlayerNameAction,
     startSearching,
+    setWaitingState,
     setGameState,
     setConnected,
     setError,
@@ -13,6 +14,8 @@ import {
 import {
     generatePlayerId,
     startMatchmaking,
+    readyMatch,
+    confirmMatch,
     initializePusherConnection,
 } from '../lib/onlineGameFunctions';
 
@@ -46,7 +49,7 @@ export const useOnlineMatching = () => {
 
     /**
      * マッチング開始処理
-     * @returns マッチング結果（成功時はgameId、待機中は'waiting'、失敗時はnull）
+     * @returns マッチング結果（tentative時はgameIdとopponentId、waiting時はgameId、失敗時はnull）
      */
     const startMatchmakingProcess = useCallback(async () => {
         if (!onlineGame.myPlayerId || !onlineGame.myPlayerName.trim()) {
@@ -59,23 +62,24 @@ export const useOnlineMatching = () => {
         const result = await startMatchmaking(onlineGame.myPlayerId, onlineGame.myPlayerName);
 
         if (result.success) {
-            if (result.status === 'matched' && result.gameId) {
-                // マッチング成功 - 状態を即座に更新
-                dispatch(setGameState({
-                    id: result.game.id,
-                    players: result.game.players,
-                    board: result.game.board,
-                    currentPlayer: result.game.current_player,
-                    status: result.game.status,
-                    winner: result.game.winner
-                }));
-                dispatch(setConnected(true));
-                return result.gameId;
-            } else {
-                // 待機中
-                dispatch(setError(result.message || 'マッチング中です...'));
-                // 待機中は、waiting-playersチャンネルに接続
-                return 'waiting';
+            if (result.status === 'tentative' && result.gameId) {
+                // 仮マッチング成功（find-matchではゲーム状態は作成されない）
+                console.log('仮マッチング成功、ready-matchを送信します');
+
+                return {
+                    type: 'tentative',
+                    gameId: result.gameId,
+                    opponentId: result.opponentId,
+                    opponentName: result.opponentName
+                };
+            } else if (result.status === 'waiting' && result.gameId) {
+                // 待機中 - game_idとstatusを設定
+                dispatch(setWaitingState({ id: result.gameId }));
+                console.log('待機中、game_idチャンネルを購読します:', result.gameId);
+                return {
+                    type: 'waiting',
+                    gameId: result.gameId
+                };
             }
         } else {
             dispatch(setError(result.message || 'エラーが発生しました'));
@@ -83,6 +87,64 @@ export const useOnlineMatching = () => {
 
         return null;
     }, [onlineGame.myPlayerId, onlineGame.myPlayerName, dispatch]);
+
+    /**
+     * マッチング準備完了通知
+     * @param gameId ゲームID
+     * @param opponentId 相手のID
+     * @param opponentName 相手の名前
+     * @returns マッチング結果
+     */
+    const readyMatchProcess = useCallback(async (gameId: string, opponentId: string, opponentName: string) => {
+        if (!onlineGame.myPlayerId || !onlineGame.myPlayerName) {
+            dispatch(setError('プレイヤー情報が設定されていません'));
+            return null;
+        }
+
+        console.log('ready-matchを送信:', gameId);
+        const result = await readyMatch(
+            gameId,
+            onlineGame.myPlayerId,
+            onlineGame.myPlayerName,
+            opponentId,
+            opponentName
+        );
+
+        if (result.success && result.status === 'playing' && result.game) {
+            // ゲーム開始
+            console.log('マッチング確定、ゲーム開始');
+            dispatch(setGameState({
+                id: result.game.id,
+                players: result.game.players,
+                board: result.game.board,
+                currentPlayer: result.game.current_player,
+                status: 'playing',
+                winner: result.game.winner
+            }));
+            dispatch(setConnected(true));
+            return { success: true, status: 'playing', game: result.game };
+        } else if (result.status === 'timeout') {
+            // タイムアウト
+            dispatch(setError('相手の応答がありませんでした'));
+            return { success: false, status: 'timeout' };
+        } else {
+            dispatch(setError(result.message || 'エラーが発生しました'));
+            return { success: false };
+        }
+    }, [onlineGame.myPlayerId, onlineGame.myPlayerName, dispatch]);
+
+    /**
+     * マッチング確認
+     * @param gameId ゲームID
+     */
+    const confirmMatchProcess = useCallback(async (gameId: string) => {
+        if (!onlineGame.myPlayerId) {
+            return;
+        }
+
+        console.log('confirm-matchを送信:', gameId);
+        await confirmMatch(gameId, onlineGame.myPlayerId);
+    }, [onlineGame.myPlayerId]);
 
     /**
      * ゲーム状態を設定（Pusherイベント受信時）
@@ -145,6 +207,8 @@ export const useOnlineMatching = () => {
         initializePlayer,
         updatePlayerName,
         startMatchmaking: startMatchmakingProcess,
+        readyMatch: readyMatchProcess,
+        confirmMatch: confirmMatchProcess,
         initializeWaitingPusher,
         clearError: clearErrorProcess,
         disconnectPusher,

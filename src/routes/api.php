@@ -22,6 +22,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // オンライン対戦用のルート
 Route::prefix('game')->group(function () {
     Route::post('/find-match', [GameController::class, 'findMatch']);
+    Route::post('/ready-match', [GameController::class, 'readyMatch']);
+    Route::post('/confirm-match', [GameController::class, 'confirmMatch']);
     Route::post('/make-move', [GameController::class, 'makeMove']);
     Route::post('/rotate-board', [GameController::class, 'rotateBoard']);
     Route::get('/state', [GameController::class, 'getGameState']);
