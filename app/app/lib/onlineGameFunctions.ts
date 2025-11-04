@@ -31,7 +31,7 @@ export const startMatchmaking = async (
     playerName: string
 ): Promise<{ success: boolean; gameId?: string; status?: string; message?: string; game?: any; opponentId?: string; opponentName?: string }> => {
     try {
-        const response = await fetch('http://localhost:8080/api/game/find-match', {
+        const response = await fetch('/api/game/find-match', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ export const readyMatch = async (
     opponentName: string
 ): Promise<{ success: boolean; status?: string; game?: any; message?: string }> => {
     try {
-        const response = await fetch('http://localhost:8080/api/game/ready-match', {
+        const response = await fetch('/api/game/ready-match', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export const confirmMatch = async (
     playerId: string
 ): Promise<{ success: boolean; message?: string }> => {
     try {
-        const response = await fetch('http://localhost:8080/api/game/confirm-match', {
+        const response = await fetch('/api/game/confirm-match', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ export const makeMove = async (
     column: number
 ): Promise<{ success: boolean; game?: any; message?: string }> => {
     try {
-        const response = await fetch('http://localhost:8080/api/game/make-move', {
+        const response = await fetch('/api/game/make-move', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -182,7 +182,7 @@ export const makeMove = async (
 // ゲームを離れる
 export const leaveGame = async (gameId: string, playerId: string): Promise<boolean> => {
     try {
-        await fetch('http://localhost:8080/api/game/leave', {
+        await fetch('/api/game/leave', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -244,7 +244,7 @@ export const getEmptyRow = (board: (string | null)[][], columnIndex: number): nu
 // ボードを回転
 export const rotateBoard = async (gameId: string, playerId: string, direction: 'left' | 'right'): Promise<{ success: boolean; game?: any; message?: string }> => {
     try {
-        const response = await fetch('http://localhost:8080/api/game/rotate-board', {
+        const response = await fetch('/api/game/rotate-board', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

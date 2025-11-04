@@ -160,7 +160,7 @@ class GameController extends Controller
         $confirmKey = "match_confirm_{$gameId}_{$opponentId}";
         $confirmed = false;
         $maxAttempts = 10; // 5秒間を0.5秒ごとにチェック
-        
+
         \Log::info('相手の応答を待機開始', [
             'game_id' => $gameId,
             'opponent_id' => $opponentId,
@@ -170,7 +170,7 @@ class GameController extends Controller
         for ($i = 0; $i < $maxAttempts; $i++) {
             usleep(500000); // 0.5秒待機
             $confirmed = cache()->get($confirmKey, false);
-            
+
             if ($confirmed) {
                 \Log::info('相手の応答確認成功', [
                     'game_id' => $gameId,

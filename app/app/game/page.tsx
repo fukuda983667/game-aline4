@@ -32,7 +32,7 @@ export default function GamePage() {
     // タイマー関連の状態
     const [timeLeft, setTimeLeft] = useState<number>(30);
     const [timerActive, setTimerActive] = useState<boolean>(false);
-    
+
     // マッチング用のタイマー状態
     const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(30);
     const [matchingTimerActive, setMatchingTimerActive] = useState<boolean>(false);

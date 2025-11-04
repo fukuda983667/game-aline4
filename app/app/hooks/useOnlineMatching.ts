@@ -138,13 +138,30 @@ export const useOnlineMatching = () => {
      * @param gameId ゲームID
      */
     const confirmMatchProcess = useCallback(async (gameId: string) => {
-        if (!onlineGame.myPlayerId) {
+        // 最新の状態をReduxから直接取得
+        const currentState = store.getState().onlineGame;
+        console.log('confirmMatchProcess呼び出し:', { 
+            gameId,
+            myPlayerId: currentState.myPlayerId,
+            gameIdFromState: currentState.id 
+        });
+
+        if (!currentState.myPlayerId) {
+            console.error('myPlayerIdがありません');
             return;
         }
 
-        console.log('confirm-matchを送信:', gameId);
-        await confirmMatch(gameId, onlineGame.myPlayerId);
-    }, [onlineGame.myPlayerId]);
+        // gameIdが渡されていない場合はReduxの状態から取得
+        const actualGameId = gameId || currentState.id;
+
+        if (!actualGameId) {
+            console.error('gameIdがありません');
+            return;
+        }
+
+        console.log('confirm-matchを送信:', actualGameId, currentState.myPlayerId);
+        await confirmMatch(actualGameId, currentState.myPlayerId);
+    }, []);
 
     /**
      * ゲーム状態を設定（Pusherイベント受信時）

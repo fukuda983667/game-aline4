@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 
 interface RankingData {
-    id: number;
     player_name: string;
     wins: number;
     year_month: string;
@@ -28,8 +27,8 @@ export default function RankingModal({ isOpen, onClose }: RankingModalProps) {
 
         try {
             const url = targetYearMonth 
-                ? `http://localhost:8080/api/ranking/monthly?year_month=${targetYearMonth}`
-                : `http://localhost:8080/api/ranking/monthly`;
+                ? `/api/ranking/monthly?year_month=${targetYearMonth}`
+                : `/api/ranking/monthly`;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -69,7 +68,7 @@ export default function RankingModal({ isOpen, onClose }: RankingModalProps) {
 
     const fetchAvailableMonths = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/ranking/available-months`, {
+            const response = await fetch(`/api/ranking/available-months`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -248,9 +247,9 @@ export default function RankingModal({ isOpen, onClose }: RankingModalProps) {
                             </div>
                         ) : (
                             <div className="space-y-1">
-                                {getRankedData().map((ranking) => (
+                                {getRankedData().map((ranking, index) => (
                                     <div
-                                        key={ranking.id}
+                                        key={`${ranking.player_name}-${ranking.year_month}-${index}`}
                                         className={`flex items-center justify-between p-3 rounded-lg ${
                                             ranking.rank <= 3
                                                 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200'
