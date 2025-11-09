@@ -10,9 +10,11 @@ import {
   type Game 
 } from '@/app/lib/gameUtils';
 import { broadcastGameEvent } from '@/app/lib/pusherServer';
+import { recordPlayerWin } from '@/utils/supabase/ranking';
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[rotate-board] route invoked');
     const body = await request.json();
     const { game_id, player_id, direction } = body;
 
@@ -97,14 +99,11 @@ export async function POST(request: NextRequest) {
     if (winner) {
       game.winner = winner;
 
-      // 勝利したプレイヤーのランキングを更新（データベースがないため、ログのみ）
+      // 勝利したプレイヤーのランキングを更新
       const winnerPlayer = getPlayerByColor(game, winner);
       if (winnerPlayer) {
-        console.log('ランキングを更新しました', {
-          player_name: winnerPlayer.name,
-          year_month: new Date().toISOString().slice(0, 7), // YYYY-MM形式
-          wins: 1 // 仮の値
-        });
+        console.log('[rotate-board] winner detected', winnerPlayer);
+        await recordPlayerWin(winnerPlayer.name);
       }
     }
 

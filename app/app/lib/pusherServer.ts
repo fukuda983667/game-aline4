@@ -64,8 +64,8 @@ export const broadcastGameEvent = {
   gameMove: async (
     gameId: string,
     game: any,
-    column: number,
-    row: number,
+    column: number | null,
+    row: number | null,
     color: string,
     playerId: string,
     isRotation: boolean = false,

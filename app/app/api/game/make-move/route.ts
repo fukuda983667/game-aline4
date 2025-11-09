@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cache } from '@/app/lib/cache';
-import { 
-  getPlayerColor, 
-  getPlayerByColor, 
-  placeStone, 
-  checkWin, 
+import {
+  getPlayerColor,
+  getPlayerByColor,
+  placeStone,
+  checkWin,
   checkDraw,
-  type Game 
+  type Game
 } from '@/app/lib/gameUtils';
 import { broadcastGameEvent } from '@/app/lib/pusherServer';
+import { recordPlayerWin } from '@/utils/supabase/ranking';
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[make-move] route invoked');
     const body = await request.json();
     const { game_id, player_id, column } = body;
 
@@ -63,14 +65,11 @@ export async function POST(request: NextRequest) {
       game.status = 'won';
       game.winner = playerColor;
 
-      // 勝利したプレイヤーのランキングを更新（データベースがないため、ログのみ）
+      // 勝利したプレイヤーのランキングを更新
       const winnerPlayer = getPlayerByColor(game, playerColor);
       if (winnerPlayer) {
-        console.log('ランキングを更新しました', {
-          player_name: winnerPlayer.name,
-          year_month: new Date().toISOString().slice(0, 7), // YYYY-MM形式
-          wins: 1 // 仮の値
-        });
+        console.log('[make-move] winner detected', winnerPlayer);
+        await recordPlayerWin(winnerPlayer.name);
       }
     } else if (checkDraw(game.board)) {
       game.status = 'draw';

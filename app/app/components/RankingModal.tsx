@@ -26,7 +26,7 @@ export default function RankingModal({ isOpen, onClose }: RankingModalProps) {
         setError(null);
 
         try {
-            const url = targetYearMonth 
+            const url = targetYearMonth
                 ? `/api/ranking/monthly?year_month=${targetYearMonth}`
                 : `/api/ranking/monthly`;
 
