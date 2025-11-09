@@ -15,7 +15,7 @@ export default function Header() {
             <nav className="container mx-auto px-4 py-4">
                 <div className="flex justify-between items-center">
                     <Link href="/" className="text-xl font-bold text-gray-800">
-                        Aline4
+                        Conect4-R
                     </Link>
                     <div className="flex space-x-8">
                         <Link

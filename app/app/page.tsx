@@ -26,8 +26,7 @@ export default function Home() {
 
     return (
         <div className="text-center">
-            <h1 className="text-6xl font-bold mb-8 text-gray-800">Aline4</h1>
-            <p className="text-xl mb-12 text-gray-600">4つの石を並べて勝利を目指せ！</p>
+            <h1 className="text-6xl font-bold mb-8 text-gray-800">Conect4-R</h1>
             <div className="flex flex-col items-center space-y-4">
                 <button
                     onClick={() => handleStart('cpu')}
